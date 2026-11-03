@@ -704,10 +704,10 @@ app.post(
     const p = await principal(req, res, true)
     if (!p) return
     const parsed = z
-      .object({ password: z.string().min(16).max(128) })
+      .object({ password: z.string().min(8).max(128) })
       .safeParse(req.body)
     if (!parsed.success) {
-      fail(res, 400, "VALIDATION_ERROR", "密码至少 16 位")
+      fail(res, 400, "VALIDATION_ERROR", "密码至少 8 位")
       return
     }
     const id = String(req.params.id)

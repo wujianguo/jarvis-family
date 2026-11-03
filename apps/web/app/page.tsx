@@ -1,8 +1,15 @@
 "use client"
 import { useCallback, useEffect, useState } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { useSession, useSignInEmail } from "@better-auth-ui/react"
+import { useSession } from "@better-auth-ui/react"
+import { Auth } from "@/components/auth/auth"
+import { AuthProvider } from "@/components/auth/auth-provider"
+import { Button } from "@workspace/ui/components/button"
+import { Badge } from "@workspace/ui/components/badge"
+import { Card } from "@workspace/ui/components/card"
+import { Toaster } from "@workspace/ui/components/sonner"
 import { createAuthClient } from "better-auth/react"
+import { useTheme } from "next-themes"
 import {
   Package,
   MessageSquare,
@@ -10,6 +17,8 @@ import {
   LogOut,
   Plus,
   Check,
+  Moon,
+  Sun,
 } from "lucide-react"
 import "./wo.css"
 const client = createAuthClient({
@@ -19,6 +28,37 @@ const client = createAuthClient({
       : `${location.origin}/family/api/auth`,
 })
 const query = new QueryClient()
+function ThemeToggle() {
+  const { resolvedTheme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setMounted(true), 0)
+    return () => clearTimeout(timer)
+  }, [])
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      className="theme-toggle"
+      aria-label={
+        mounted && resolvedTheme === "dark"
+          ? "切换到浅色模式"
+          : "切换到深色模式"
+      }
+      onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+      disabled={!mounted}
+    >
+      {mounted && resolvedTheme === "dark" ? (
+        <Sun size={16} />
+      ) : (
+        <Moon size={16} />
+      )}
+      <span>
+        {mounted && resolvedTheme === "dark" ? "浅色模式" : "深色模式"}
+      </span>
+    </Button>
+  )
+}
 async function api<T>(
   path: string,
   method = "GET",
@@ -65,9 +105,6 @@ type Member = {
 }
 function Home() {
   const session = useSession(client)
-  const signin = useSignInEmail(client)
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [role, setRole] = useState("")
   const [tab, setTab] = useState("pickups")
@@ -130,49 +167,18 @@ function Home() {
   if (!session.data?.user)
     return (
       <main className="login">
-        <form
-          className="login-card"
-          onSubmit={(e) => {
-            e.preventDefault()
-            setError("")
-            signin.mutate(
-              { email, password },
-              {
-                onSuccess: () => void session.refetch(),
-                onError: (e) => setError(e.message),
-              }
-            )
-          }}
-        >
-          <div className="mark">窝</div>
-          <h1>欢迎回到窝事</h1>
+        <div className="login-theme">
+          <ThemeToggle />
+        </div>
+        <div className="login-stack">
+          <div className="login-brand">
+            <span className="mark">窝</span>
+            <h1>窝事</h1>
+          </div>
           <p>家里的快递，一眼就知道。</p>
-          <label>
-            邮箱
-            <input
-              type="email"
-              autoComplete="username"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </label>
-          <label>
-            密码
-            <input
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </label>
-          <button className="primary" disabled={signin.isPending}>
-            登录
-          </button>
-          {error && <p className="error">{error}</p>}
+          <Auth view="signIn" />
           <small>仅受邀家庭成员可登录</small>
-        </form>
+        </div>
       </main>
     )
   return (
@@ -186,33 +192,37 @@ function Home() {
           </div>
         </div>
         <nav>
-          <button
+          <Button
+            variant="ghost"
             className={tab === "pickups" ? "active" : ""}
             onClick={() => setTab("pickups")}
           >
             <Package size={18} />
             快递
-          </button>
+          </Button>
           {role === "ADMIN" && (
             <>
-              <button
+              <Button
+                variant="ghost"
                 className={tab === "sms" ? "active" : ""}
                 onClick={() => setTab("sms")}
               >
                 <MessageSquare size={18} />
                 SMS 接入
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="ghost"
                 className={tab === "members" ? "active" : ""}
                 onClick={() => setTab("members")}
               >
                 <Users size={18} />
                 家庭成员
-              </button>
+              </Button>
             </>
           )}
         </nav>
         <div className="aside-foot">
+          <ThemeToggle />
           <small>{session.data.user.email}</small>
           <button
             onClick={() => void client.signOut().then(() => session.refetch())}
@@ -241,7 +251,9 @@ function Home() {
                   : "家庭成员"}
             </h1>
           </div>
-          <span>{role === "ADMIN" ? "管理员" : "家庭成员"}</span>
+          <Badge variant="secondary">
+            {role === "ADMIN" ? "管理员" : "家庭成员"}
+          </Badge>
         </header>
         {error && <div className="error">{error}</div>}
         {tab === "pickups" && (
@@ -287,15 +299,15 @@ function Home() {
               <div className="list">
                 {pickups.length ? (
                   pickups.map((p) => (
-                    <div
-                      className="card"
+                    <Card
+                      className="pickup-card cursor-pointer transition-colors hover:border-primary"
                       key={p.id}
                       onClick={() => setSelected(p)}
                     >
                       <div className="meta">
-                        <span className="badge">
+                        <Badge variant="secondary">
                           {p.source === "SMS" ? "短信自动" : "手工录入"}
-                        </span>
+                        </Badge>
                         <small>
                           {new Date(p.createdAt).toLocaleString("zh-CN")}
                         </small>
@@ -317,7 +329,7 @@ function Home() {
                           </button>
                         )}
                       </div>
-                    </div>
+                    </Card>
                   ))
                 ) : (
                   <div className="empty">这里还没有快递</div>
@@ -493,7 +505,7 @@ function Home() {
                     <button
                       onClick={() => {
                         const password = window.prompt(
-                          `为 ${m.displayName} 设置初始密码（至少 16 位）`
+                          `为 ${m.displayName} 设置初始密码（至少 8 位）`
                         )
                         if (password)
                           void action(() =>
@@ -670,7 +682,24 @@ function Home() {
 export default function Page() {
   return (
     <QueryClientProvider client={query}>
-      <Home />
+      <AuthProvider
+        authClient={client}
+        queryClient={query}
+        basePaths={{ auth: "/family/auth" }}
+        redirectTo="/family"
+        emailAndPassword={{
+          enabled: true,
+          forgotPassword: false,
+          minPasswordLength: 8,
+        }}
+        navigate={({ to, replace }) => {
+          if (replace) window.location.replace(to)
+          else window.location.assign(to)
+        }}
+      >
+        <Home />
+        <Toaster />
+      </AuthProvider>
     </QueryClientProvider>
   )
 }

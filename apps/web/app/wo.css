@@ -1,10 +1,20 @@
+/* Layout for the family workspace; colors come from shared shadcn tokens. */
 :root {
-  --ink: #202722;
-  --muted: #78847c;
-  --green: #286c51;
-  --line: #e4e9e3;
-  --bg: #f7f8f4;
+  --ink: var(--foreground);
+  --green: var(--primary);
+  --line: var(--border);
+  --bg: var(--background);
+  --surface: var(--card);
+  --soft: var(--secondary);
+  --soft-ink: var(--secondary-foreground);
+  --segment: var(--muted);
+  --code-bg: var(--muted);
+  --login-bg: var(--background);
+  --mark-bg: var(--accent);
+  --error-bg: color-mix(in oklch, var(--destructive) 13%, var(--card));
+  --error-ink: var(--destructive);
 }
+
 * {
   box-sizing: border-box;
 }
@@ -13,33 +23,33 @@ input,
 textarea {
   font: inherit;
 }
-button {
+button:not([data-slot]) {
   cursor: pointer;
   border: 1px solid var(--line);
   border-radius: 9px;
   padding: 9px 14px;
-  background: white;
+  background: var(--surface);
   color: var(--ink);
 }
-button:disabled {
+button:not([data-slot]):disabled {
   opacity: 0.5;
 }
-input,
-textarea {
+input:not([data-slot]),
+textarea:not([data-slot]) {
   border: 1px solid var(--line);
   border-radius: 9px;
   padding: 10px 12px;
-  background: white;
+  background: var(--surface);
   color: var(--ink);
   outline: none;
 }
-input:focus,
-textarea:focus {
+input:not([data-slot]):focus,
+textarea:not([data-slot]):focus {
   border-color: var(--green);
 }
 .primary {
   background: var(--green);
-  color: white;
+  color: var(--primary-foreground);
   border-color: var(--green);
   display: inline-flex;
   align-items: center;
@@ -55,7 +65,7 @@ textarea:focus {
 aside {
   width: 238px;
   flex-shrink: 0;
-  background: #fff;
+  background: var(--surface);
   border-right: 1px solid var(--line);
   padding: 28px 16px;
   display: flex;
@@ -82,8 +92,8 @@ aside {
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  background: #d9eade;
-  color: #226344;
+  background: var(--mark-bg);
+  color: var(--soft-ink);
   font-weight: 800;
   font-size: 20px;
 }
@@ -101,8 +111,8 @@ nav button {
   background: transparent;
 }
 nav button.active {
-  background: #eaf2eb;
-  color: #246044;
+  background: var(--soft);
+  color: var(--soft-ink);
   font-weight: 700;
 }
 .aside-foot {
@@ -140,8 +150,8 @@ header h1 {
 }
 header span,
 .badge {
-  background: #e8f0e9;
-  color: #2e6a4d;
+  background: var(--soft);
+  color: var(--soft-ink);
   border-radius: 99px;
   padding: 5px 10px;
   font-size: 12px;
@@ -157,7 +167,7 @@ header span,
   width: 240px;
 }
 .segment {
-  background: #e9eee8;
+  background: var(--segment);
   border-radius: 10px;
   padding: 4px;
   display: flex;
@@ -167,7 +177,7 @@ header span,
   background: transparent;
 }
 .segment button.chosen {
-  background: white;
+  background: var(--surface);
   box-shadow: 0 1px 4px #0001;
 }
 .columns {
@@ -180,12 +190,12 @@ header span,
   align-content: start;
   gap: 12px;
 }
-.card,
+.pickup-card,
 .detail,
 .member-form,
 .by-code,
 .members {
-  background: white;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 14px;
 }
@@ -193,8 +203,8 @@ header span,
   padding: 18px 20px;
   cursor: pointer;
 }
-.card:hover {
-  border-color: #a9cbb4;
+.pickup-card:hover {
+  border-color: var(--green);
 }
 .meta,
 .card-foot {
@@ -229,7 +239,7 @@ header span,
   margin: 12px 0;
 }
 .big-code {
-  background: #f2f6f0;
+  background: var(--code-bg);
   padding: 18px;
   border-radius: 10px;
   color: var(--green);
@@ -326,7 +336,7 @@ header span,
   padding: 20px;
 }
 .modal {
-  background: white;
+  background: var(--surface);
   width: min(480px, 100%);
   border-radius: 18px;
   padding: 28px;
@@ -355,12 +365,35 @@ header span,
   min-height: 100vh;
   display: grid;
   place-items: center;
-  background: #edf2eb;
+  background: var(--login-bg);
+  color: var(--ink);
+}
+.login-theme {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.header-actions .theme-toggle span {
+  background: none;
+  color: var(--ink);
+  padding: 0;
+  font-size: inherit;
 }
 .login-card {
   width: min(420px, 92vw);
   padding: 38px;
-  background: white;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 20px;
   box-shadow: 0 15px 40px #233c2910;
@@ -380,8 +413,8 @@ header span,
   margin-top: 8px;
 }
 .error {
-  background: #fff0ec;
-  color: #a54331;
+  background: var(--error-bg);
+  color: var(--error-ink);
   padding: 12px;
   border-radius: 9px;
   margin-bottom: 16px;
@@ -416,4 +449,43 @@ header span,
     flex: 1;
     width: 150px;
   }
+}
+
+.login-stack {
+  width: min(420px, calc(100vw - 32px));
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+}
+.login-stack > p,
+.login-stack > small {
+  color: var(--muted-foreground);
+  text-align: center;
+}
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.login-brand h1 {
+  font-size: 26px;
+  font-weight: 750;
+}
+.login-stack [data-slot="card"] {
+  box-shadow: 0 18px 50px
+    color-mix(in oklch, var(--foreground) 10%, transparent);
+}
+.aside-foot .theme-toggle {
+  width: 100%;
+  justify-content: flex-start;
+  margin-bottom: 14px;
+}
+.pickup-card {
+  padding: 20px;
+  text-align: left;
+}
+.pickup-card h2 {
+  font-size: 19px;
+  margin: 14px 0;
+  font-weight: 650;
 }

@@ -3,8 +3,8 @@ import { hashPassword } from "better-auth/crypto"
 
 const email = "lsjustin@yeah.net"
 const password = process.env.ADMIN_INITIAL_PASSWORD
-if (!password || password.length < 16)
-  throw new Error("ADMIN_INITIAL_PASSWORD must contain at least 16 characters")
+if (!password || password.length < 8)
+  throw new Error("ADMIN_INITIAL_PASSWORD must contain at least 8 characters")
 await db.$transaction(async (tx) => {
   const user = await tx.user.upsert({
     where: { email },
