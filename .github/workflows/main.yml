@@ -23,15 +23,6 @@ jobs:
       - run: DATABASE_URL=postgresql://x:x@localhost:5432/x pnpm --filter @workspace/db generate
       - run: pnpm --filter @workspace/contracts typecheck && pnpm --filter @workspace/db typecheck && pnpm --filter api typecheck && pnpm --filter mini typecheck && pnpm --filter web typecheck
       - run: pnpm --filter mini build && pnpm --filter web build && pnpm --filter api build
-      - name: Upload mini program
-        if: ${{ env.HAS_MINI_KEY == 'true' }}
-        env:
-          WECHAT_UPLOAD_PRIVATE_KEY: ${{ secrets.WECHAT_UPLOAD_PRIVATE_KEY }}
-        run: |
-          umask 077
-          printf '%s' "$WECHAT_UPLOAD_PRIVATE_KEY" > /tmp/woshi-upload.key
-          WECHAT_UPLOAD_PRIVATE_KEY_PATH=/tmp/woshi-upload.key MINI_VERSION=0.0.${{ github.run_number }} pnpm --filter mini upload
-          rm -f /tmp/woshi-upload.key
       - name: Configure SSH
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -51,3 +42,16 @@ jobs:
           ssh ecs-user@101.200.151.162 "tar -xzf /tmp/woshi-release.tar.gz -C '$release'"
           ssh ecs-user@101.200.151.162 "bash '$release/scripts/deploy-remote.sh' '$release'"
           curl -fsS https://share.libms.top/family/api/health
+      - uses: actions/setup-node@v4
+        if: ${{ env.HAS_MINI_KEY == 'true' }}
+        with:
+          node-version: '20'
+      - name: Upload mini program
+        if: ${{ env.HAS_MINI_KEY == 'true' }}
+        env:
+          WECHAT_UPLOAD_PRIVATE_KEY: ${{ secrets.WECHAT_UPLOAD_PRIVATE_KEY }}
+        run: |
+          umask 077
+          printf '%s' "$WECHAT_UPLOAD_PRIVATE_KEY" > /tmp/woshi-upload.key
+          trap 'rm -f /tmp/woshi-upload.key' EXIT
+          WECHAT_UPLOAD_PRIVATE_KEY_PATH=/tmp/woshi-upload.key MINI_VERSION=0.0.${{ github.run_number }} pnpm --filter mini upload
