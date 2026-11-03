@@ -18,8 +18,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-cert
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/node_modules/.pnpm/@prisma+engines@7.10.1/node_modules/@prisma/engines/schema-engine-debian-openssl-3.0.x /app/bin/schema-engine
 COPY --from=build /app/apps/api ./apps/api
 COPY --from=build /app/packages/db ./packages/db
 COPY --from=build /app/packages/contracts ./packages/contracts
-ENV NODE_ENV=production PORT=3001 HOST=127.0.0.1
+ENV NODE_ENV=production PORT=3001 HOST=127.0.0.1 \
+    PRISMA_SCHEMA_ENGINE_BINARY=/app/bin/schema-engine
 CMD ["node", "/app/apps/api/dist/server.js"]
