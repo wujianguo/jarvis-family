@@ -18,6 +18,8 @@ jobs:
         with:
           version: 11.25.0
       - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
       - run: DATABASE_URL=postgresql://x:x@localhost:5432/x pnpm --filter @workspace/db generate
       - run: pnpm --filter @workspace/contracts typecheck && pnpm --filter @workspace/db typecheck && pnpm --filter api typecheck && pnpm --filter mini typecheck && pnpm --filter web typecheck
       - run: pnpm --filter mini build && pnpm --filter web build && pnpm --filter api build

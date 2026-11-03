@@ -1,7 +1,10 @@
-dist/
-node_modules/
-.next/
-.turbo/
-coverage/
+**/dist/
+**/node_modules/
+**/.next/
+**/.turbo/
+**/.swc/
+**/coverage/
+**/*.tsbuildinfo
 pnpm-lock.yaml
 .pnpm-store/
+**/next-env.d.ts

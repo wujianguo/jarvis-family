@@ -5,5 +5,10 @@
   "license": "PROPRIETARY",
   "publishConfig": {
     "access": "public"
+  },
+  "scripts": {
+    "format": "prettier --write . --ignore-path ../../.prettierignore",
+    "format:check": "prettier --check . --ignore-path ../../.prettierignore",
+    "lint": "prettier --check ."
   }
 }

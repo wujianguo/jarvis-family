@@ -1,13 +1,194 @@
-import { useEffect,useState } from "react"
-import { View,Text,Button } from "@tarojs/components"
-import Taro,{useDidShow,usePullDownRefresh} from "@tarojs/taro"
-import {api,wxCode,setToken,token,clearToken,type Pickup} from "../../api"
-export default function Index(){
- const [identity,setIdentity]=useState<{openid:string;unionid?:string|null}|null>(null),[logged,setLogged]=useState(false),[items,setItems]=useState<Pickup[]>([]),[status,setStatus]=useState("PENDING"),[error,setError]=useState(""),[busy,setBusy]=useState(false)
- const load=async(s=status)=>{try{await api("/me");setLogged(true);setItems((await api<{items:Pickup[]}>(`/express/pickups?status=${s}`)).items);setIdentity(null)}catch{clearToken();setLogged(false);await identify()}}
- const identify=async()=>{try{setIdentity(await api("/auth/wechat-mini/identity","POST",{code:await wxCode()}))}catch(e){setError((e as Error).message)}}
- const exchange=async()=>{setBusy(true);try{const v=await api<{token:string}>("/auth/wechat-mini/exchange","POST",{code:await wxCode()});setToken(v.token);await load()}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
- useDidShow(()=>{void (token()?load():identify())});usePullDownRefresh(()=>void load().finally(()=>Taro.stopPullDownRefresh()))
- const done=async(id:string)=>{try{await api(`/express/pickups/${id}/done`,"POST");await load()}catch(e){setError((e as Error).message)}}
- return <View className="page">{!logged?<><View className="hero"><Text className="eyebrow">欢迎来到窝事</Text><Text className="title">家里的快递，\n一眼就知道。</Text><Text>先把下面的身份发给管理员，加入白名单后再登录。</Text></View><View className="panel"><Text className="label">你的 openid</Text><Text className="identity">{identity?.openid||"正在获取…"}</Text><Button onClick={()=>identity&&Taro.setClipboardData({data:identity.openid})}>复制 openid</Button><Text className="label">unionid</Text><Text className="identity">{identity?.unionid||"暂无"}</Text>{identity?.unionid&&<Button onClick={()=>Taro.setClipboardData({data:identity.unionid!})}>复制 unionid</Button>}<Text className="label">AppID · wxce94463a6a805e99</Text><Text className="label">原始 ID · gh_a696f88a7ea0</Text></View><Button className="primary" loading={busy} onClick={exchange}>已加入白名单，微信登录</Button></>:<><View className="hero"><Text className="eyebrow">窝事 / 家里的快递</Text><Text className="title">今天有什么\n快递要取？</Text></View><View className="tabs"><Text className={status==="PENDING"?"active":""} onClick={()=>{setStatus("PENDING");void load("PENDING")}}>待取</Text><Text className={status==="DONE"?"active":""} onClick={()=>{setStatus("DONE");void load("DONE")}}>已取</Text></View>{items.length?items.map(p=><View className="pickup" key={p.id} onClick={()=>Taro.navigateTo({url:`/pages/detail/index?id=${p.id}`})}><Text className="source">{p.source==="SMS"?"短信自动":"手工录入"}</Text><Text className="address">{p.address}</Text><Text className="code">{p.pickupCode}</Text>{p.status==="PENDING"&&<Button onClick={e=>{e.stopPropagation();void done(p.id)}}>标记已取</Button>}</View>):<View className="empty">这里还没有{status==="PENDING"?"待取":"已取"}快递</View>}<Button className="primary fixed" onClick={()=>Taro.navigateTo({url:"/pages/form/index"})}>＋ 录入快递</Button><Text className="signout" onClick={()=>void api("/logout","POST").finally(()=>{clearToken();setLogged(false);void identify()})}>退出登录</Text></>}{error&&<Text className="error">{error}</Text>}</View>
+import { useEffect, useState } from "react"
+import { View, Text, Button } from "@tarojs/components"
+import Taro, { useDidShow, usePullDownRefresh } from "@tarojs/taro"
+import {
+  api,
+  wxCode,
+  setToken,
+  token,
+  clearToken,
+  type Pickup,
+} from "../../api"
+export default function Index() {
+  const [identity, setIdentity] = useState<{
+      openid: string
+      unionid?: string | null
+    } | null>(null),
+    [logged, setLogged] = useState(false),
+    [items, setItems] = useState<Pickup[]>([]),
+    [status, setStatus] = useState("PENDING"),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false)
+  const load = async (s = status) => {
+    try {
+      await api("/me")
+      setLogged(true)
+      setItems(
+        (await api<{ items: Pickup[] }>(`/express/pickups?status=${s}`)).items
+      )
+      setIdentity(null)
+    } catch {
+      clearToken()
+      setLogged(false)
+      await identify()
+    }
+  }
+  const identify = async () => {
+    try {
+      setIdentity(
+        await api("/auth/wechat-mini/identity", "POST", {
+          code: await wxCode(),
+        })
+      )
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
+  const exchange = async () => {
+    setBusy(true)
+    try {
+      const v = await api<{ token: string }>(
+        "/auth/wechat-mini/exchange",
+        "POST",
+        { code: await wxCode() }
+      )
+      setToken(v.token)
+      await load()
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  useDidShow(() => {
+    void (token() ? load() : identify())
+  })
+  usePullDownRefresh(
+    () => void load().finally(() => Taro.stopPullDownRefresh())
+  )
+  const done = async (id: string) => {
+    try {
+      await api(`/express/pickups/${id}/done`, "POST")
+      await load()
+    } catch (e) {
+      setError((e as Error).message)
+    }
+  }
+  return (
+    <View className="page">
+      {!logged ? (
+        <>
+          <View className="hero">
+            <Text className="eyebrow">欢迎来到窝事</Text>
+            <Text className="title">家里的快递，\n一眼就知道。</Text>
+            <Text>先把下面的身份发给管理员，加入白名单后再登录。</Text>
+          </View>
+          <View className="panel">
+            <Text className="label">你的 openid</Text>
+            <Text className="identity">{identity?.openid || "正在获取…"}</Text>
+            <Button
+              onClick={() =>
+                identity && Taro.setClipboardData({ data: identity.openid })
+              }
+            >
+              复制 openid
+            </Button>
+            <Text className="label">unionid</Text>
+            <Text className="identity">{identity?.unionid || "暂无"}</Text>
+            {identity?.unionid && (
+              <Button
+                onClick={() =>
+                  Taro.setClipboardData({ data: identity.unionid! })
+                }
+              >
+                复制 unionid
+              </Button>
+            )}
+            <Text className="label">AppID · wxce94463a6a805e99</Text>
+            <Text className="label">原始 ID · gh_a696f88a7ea0</Text>
+          </View>
+          <Button className="primary" loading={busy} onClick={exchange}>
+            已加入白名单，微信登录
+          </Button>
+        </>
+      ) : (
+        <>
+          <View className="hero">
+            <Text className="eyebrow">窝事 / 家里的快递</Text>
+            <Text className="title">今天有什么\n快递要取？</Text>
+          </View>
+          <View className="tabs">
+            <Text
+              className={status === "PENDING" ? "active" : ""}
+              onClick={() => {
+                setStatus("PENDING")
+                void load("PENDING")
+              }}
+            >
+              待取
+            </Text>
+            <Text
+              className={status === "DONE" ? "active" : ""}
+              onClick={() => {
+                setStatus("DONE")
+                void load("DONE")
+              }}
+            >
+              已取
+            </Text>
+          </View>
+          {items.length ? (
+            items.map((p) => (
+              <View
+                className="pickup"
+                key={p.id}
+                onClick={() =>
+                  Taro.navigateTo({ url: `/pages/detail/index?id=${p.id}` })
+                }
+              >
+                <Text className="source">
+                  {p.source === "SMS" ? "短信自动" : "手工录入"}
+                </Text>
+                <Text className="address">{p.address}</Text>
+                <Text className="code">{p.pickupCode}</Text>
+                {p.status === "PENDING" && (
+                  <Button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      void done(p.id)
+                    }}
+                  >
+                    标记已取
+                  </Button>
+                )}
+              </View>
+            ))
+          ) : (
+            <View className="empty">
+              这里还没有{status === "PENDING" ? "待取" : "已取"}快递
+            </View>
+          )}
+          <Button
+            className="primary fixed"
+            onClick={() => Taro.navigateTo({ url: "/pages/form/index" })}
+          >
+            ＋ 录入快递
+          </Button>
+          <Text
+            className="signout"
+            onClick={() =>
+              void api("/logout", "POST").finally(() => {
+                clearToken()
+                setLogged(false)
+                void identify()
+              })
+            }
+          >
+            退出登录
+          </Text>
+        </>
+      )}
+      {error && <Text className="error">{error}</Text>}
+    </View>
+  )
 }

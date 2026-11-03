@@ -1,1 +1,28 @@
-{"name":"@workspace/db","version":"0.0.1","private":true,"type":"module","main":"./src/index.ts","scripts":{"generate":"prisma generate","migrate":"prisma migrate deploy","typecheck":"tsc --noEmit"},"dependencies":{"@prisma/adapter-pg":"7.10.1","@prisma/client":"7.10.1","pg":"^8.23.1"},"devDependencies":{"@types/pg":"^8.23.1","prisma":"7.10.1","tsx":"^4.23.15","typescript":"^5.9.3"}}
+{
+  "name": "@workspace/db",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "generate": "prisma generate",
+    "migrate": "prisma migrate deploy",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write . --ignore-path ../../.prettierignore",
+    "format:check": "prettier --check . --ignore-path ../../.prettierignore"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1",
+    "prisma": "7.10.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "@workspace/eslint-config": "workspace:*",
+    "eslint": "^10"
+  }
+}

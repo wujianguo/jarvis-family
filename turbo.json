@@ -1,6 +1,22 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
+  "globalEnv": [
+    "ADMIN_INITIAL_PASSWORD",
+    "BETTER_AUTH_SECRET",
+    "BETTER_AUTH_URL",
+    "DATABASE_URL",
+    "MINI_DESC",
+    "MINI_VERSION",
+    "PORT",
+    "SMS_AI_API_KEY",
+    "SMS_AI_BASE_URL",
+    "SMS_AI_MODEL",
+    "SMS_INGEST_TOKEN",
+    "WECHAT_MINI_APPID",
+    "WECHAT_MINI_SECRET",
+    "WECHAT_UPLOAD_PRIVATE_KEY_PATH"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -12,6 +28,9 @@
     },
     "format": {
       "dependsOn": ["^format"]
+    },
+    "format:check": {
+      "dependsOn": ["^format:check"]
     },
     "typecheck": {
       "dependsOn": ["^typecheck"]

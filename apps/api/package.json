@@ -1,1 +1,30 @@
-{"name":"api","version":"0.0.1","private":true,"type":"module","scripts":{"dev":"tsx watch src/server.ts","build":"tsc","start":"node dist/server.js","typecheck":"tsc --noEmit"},"dependencies":{"@workspace/contracts":"workspace:*","@workspace/db":"workspace:*","better-auth":"1.4.21","express":"^5.3.0","zod":"^4.6.7"},"devDependencies":{"@types/express":"^5.0.6","@types/node":"^20.19.43","tsx":"^4.23.15","typescript":"^7.0.2"}}
+{
+  "name": "api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write . --ignore-path ../../.prettierignore",
+    "format:check": "prettier --check . --ignore-path ../../.prettierignore"
+  },
+  "dependencies": {
+    "@workspace/contracts": "workspace:*",
+    "@workspace/db": "workspace:*",
+    "better-auth": "1.4.21",
+    "express": "^5.3.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^20.19.43",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "@workspace/eslint-config": "workspace:*",
+    "eslint": "^10"
+  }
+}

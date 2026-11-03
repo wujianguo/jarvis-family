@@ -7,9 +7,10 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint",
-    "format": "prettier --write \"**/*.{ts,tsx}\"",
-    "typecheck": "tsc --noEmit"
+    "lint": "eslint .",
+    "format": "prettier --write . --ignore-path ../../.prettierignore",
+    "typecheck": "tsc --noEmit",
+    "format:check": "prettier --check . --ignore-path ../../.prettierignore"
   },
   "dependencies": {
     "@better-auth-ui/react": "1.7.6",

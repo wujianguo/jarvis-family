@@ -1,1 +1,20 @@
-{"name":"@workspace/contracts","version":"0.0.1","private":true,"type":"module","main":"./src/index.ts","scripts":{"typecheck":"tsc --noEmit"},"dependencies":{"zod":"^4.6.7"}}
+{
+  "name": "@workspace/contracts",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write . --ignore-path ../../.prettierignore",
+    "format:check": "prettier --check . --ignore-path ../../.prettierignore"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@workspace/eslint-config": "workspace:*",
+    "eslint": "^10"
+  }
+}
