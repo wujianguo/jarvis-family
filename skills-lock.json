@@ -25,11 +25,47 @@
       "skillPath": "packages/react/skills/better-auth-ui-react/SKILL.md",
       "computedHash": "9823e1b1cf4d30b06e67ab4886fb55d4833411dc4c0bf6fefb855a8a26a2e5a7"
     },
+    "claude-dashboard": {
+      "source": "JimLiu/baoyu-design",
+      "sourceType": "github",
+      "skillPath": "skills/claude-dashboard/SKILL.md",
+      "computedHash": "110e3008007cf71c35dc7c9e4cfae37739d5c72545610e2f1b24f2233c9691e9"
+    },
+    "claude-design": {
+      "source": "JimLiu/baoyu-design",
+      "sourceType": "github",
+      "skillPath": "skills/claude-design/SKILL.md",
+      "computedHash": "cdb34f9bb04ee6eb2f80d53479817b958cde764c1cf7fa897b8cfbd1bd615e7a"
+    },
+    "claude-design-system": {
+      "source": "JimLiu/baoyu-design",
+      "sourceType": "github",
+      "skillPath": "skills/claude-design-system/SKILL.md",
+      "computedHash": "ba011219d475b38e466dcc7b24118f67d68387d277846e9342f5cdb995403a61"
+    },
+    "claude-motion": {
+      "source": "JimLiu/baoyu-design",
+      "sourceType": "github",
+      "skillPath": "skills/claude-motion/SKILL.md",
+      "computedHash": "112c21ec4424a375da4a8734370aaf8c9cf0614f0eefcc1cb7a70ebf7a31a64c"
+    },
+    "claude-slides": {
+      "source": "JimLiu/baoyu-design",
+      "sourceType": "github",
+      "skillPath": "skills/claude-slides/SKILL.md",
+      "computedHash": "ed8a083dfc7a9385532a925c9fcecd4530187633c091c97572e157ba520cfe24"
+    },
     "create-auth": {
       "source": "better-auth/skills",
       "sourceType": "github",
       "skillPath": "better-auth/create-auth/SKILL.md",
       "computedHash": "9a9b498bc144367b8e237233f89def63fb2bd69e8cafe173eaa58fe3a863cdc4"
+    },
+    "dataviz": {
+      "source": "JimLiu/baoyu-design",
+      "sourceType": "github",
+      "skillPath": "skills/dataviz/SKILL.md",
+      "computedHash": "e0a2acae54130e9eb977a496ac156a362d39f39e168161a46b4a88ebf6f76d9f"
     },
     "email-and-password-best-practices": {
       "source": "better-auth/skills",
@@ -49,11 +85,23 @@
       "skillPath": "skills/mastra-factory/SKILL.md",
       "computedHash": "a6b090afbc1bbaa0001da0062de34f8116633cbfe59b8ce88e1d6975361ee4d0"
     },
+    "motion-director": {
+      "source": "JimLiu/baoyu-design",
+      "sourceType": "github",
+      "skillPath": "skills/motion-director/SKILL.md",
+      "computedHash": "666115620a3a831e1a67344345849a3e37e55983e9c7bd0d5f5561ad9e8fa00d"
+    },
     "organization-best-practices": {
       "source": "better-auth/skills",
       "sourceType": "github",
       "skillPath": "better-auth/organization/SKILL.md",
       "computedHash": "8c85e683dabef4532f1e8b67bbed5c453d39e0e3d5aeedd69d16b568f6e6d44f"
+    },
+    "release-skills": {
+      "source": "JimLiu/baoyu-design",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/release-skills/SKILL.md",
+      "computedHash": "fd4616d141589bcd23621b9ff1be30b29985f86566acf9bca7d55f0a894ab79e"
     },
     "shadcn": {
       "source": "shadcn/ui",
