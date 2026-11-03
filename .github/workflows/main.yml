@@ -63,7 +63,7 @@ jobs:
       - uses: actions/setup-node@v4
         if: env.HAS_MINI_KEY == 'true'
         with:
-          node-version: "20"
+          node-version: "24"
       - uses: pnpm/action-setup@v4
         if: env.HAS_MINI_KEY == 'true'
         with:
