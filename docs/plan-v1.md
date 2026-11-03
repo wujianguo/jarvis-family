@@ -4,7 +4,7 @@
 
 ## 范围与判断
 
-家人能在小程序查看待取快递、录入通知、查看详情并标记已取；Web 管理端补充编辑、按码完成及白名单管理。此轮交付方案、Prisma 草案和可浏览原型，不实现生产接口。旧 jarvis 的快递 REST 能力是功能核对表；新系统以 PostgreSQL 为唯一业务数据源，不接入飞书。SMS 自动录入放到下一阶段。
+家人能在小程序查看待取快递、录入通知、查看详情并标记已取；Web 管理端补充编辑、按码完成、SMS 自动录入记录来源及白名单管理。SMS 接入属于 MVP。此轮交付方案、Prisma 草案和可浏览原型，不实现生产接口。旧 jarvis 的快递 REST 与短信流程只作功能参考；新系统以 PostgreSQL 为唯一业务数据源。新库从零开始，不从旧 jarvis 或飞书 Bitable 导入历史快递。
 
 ## 总体架构
 
@@ -12,20 +12,45 @@
 | --- | --- | --- |
 | `apps/web` | Next.js Web 管理端；shadcn/ui blocks 的侧栏、列表、详情、表单结构 | 现有模板保留，按原型逐步实现 |
 | `apps/mini` | Taro + React 微信小程序；轻量取件流程 | 规划目录，MVP 建立 |
-| `apps/api` | Node 服务，统一承载 Better Auth、微信登录桥接和 `/api/express` | 规划目录，MVP 建立 |
+| `apps/api` | Node 服务，统一承载 Better Auth、微信登录桥接、快递 API 与 SMS ingest/处理 | 规划目录，MVP 建立 |
 | `packages/db` | Prisma schema、migration、Prisma Client | 本轮提交 schema 草案 |
 | `packages/contracts` | Zod 请求/响应契约及状态常量，供三端复用 | MVP 建立 |
 | `packages/ui` | 现有 Web shadcn/ui 组件 | 现有目录 |
 
-推荐部署为 Web 与 API 同站点反向代理，`/api/*` 转给 API，减少浏览器跨站 Cookie 问题；小程序通过 HTTPS API 域名访问。API 独立于 Next.js，可服务两端。开发与部署均使用 PostgreSQL；Prisma migration 管理结构变更。所有业务读写都在 API 完成鉴权和白名单检查。
+API 独立于 Next.js，可服务 Web、小程序与 iOS 捷径。开发与部署均使用 PostgreSQL；Prisma migration 管理结构变更。交互业务请求在 API 完成会话鉴权和白名单检查；SMS ingest 使用独立的设备密钥，不借用家庭成员会话。
+
+### 生产部署目标
+
+目标为个人生活向的阿里云北京机器 `101.200.151.162`，域名暂用 `share.libms.top`。现有 nginx 已在此域名提供静态站，当前静态原型位于 `https://share.libms.top/jarvis-family/`。推荐保留静态站的 `/` 和原型的 `/jarvis-family/`，将未来正式 Web 放在 `https://share.libms.top/family/`，API 对外放在 `https://share.libms.top/family/api/`。Web 设置 Next.js `basePath=/family`，静态资源与站内链接均带此前缀；Better Auth 的公开 URL 使用 `/family/api/auth`，Cookie Path 与回调路径按所选版本验证。服务只监听本机回环地址，PostgreSQL 不对公网开放。上线前检查现有 nginx 路由是否占用 `/family/`，复用现有有效证书并确认续期覆盖 `share.libms.top`。
+
+在现有 HTTPS `server` 块中增加以下示意配置；保留原有 `location /`、静态站及 `/jarvis-family/` 规则。API 的 `proxy_pass` 尾部 `/api/` 会把公开前缀 `/family/api/` 替换为内部 `/api/`；Web 的 `proxy_pass` 不带 URI，保留 `/family/` 以匹配 Next.js `basePath`。`^~` 避免现有静态资源正则 location 抢先处理这两个路径，`/family/api/` 的最长前缀先于 `/family/` 命中。
+
+```nginx
+location = /family { return 308 /family/; }
+location ^~ /family/api/ {
+    proxy_pass http://127.0.0.1:3001/api/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+}
+location ^~ /family/ {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+}
+```
+
+改动前先备份当前 nginx 配置，用 `nginx -t` 校验后 reload，检查 `/`、`/jarvis-family/`、`/family/`、API 与 Auth 回调均走预期路径。小程序后台将 `https://share.libms.top` 配为合法 `request` 域名（如后续使用上传/下载或 WebView，再分别配置对应域名）；真机与正式版走 HTTPS，不使用服务器 IP。iOS 捷径请求同一域名下的 `/family/api/sms/ingest`。
 
 ## 数据模型
 
-草案见 [`packages/db/prisma/schema.prisma`](../packages/db/prisma/schema.prisma)。`User`、`Session`、`Account`、`Verification` 满足 Better Auth 基础存储；最终字段需在安装锁定版本的 Better Auth 后用其 CLI 生成结果校对。`Whitelist` 按邮箱或微信身份建立邀请条目，`ExpressPickup` 记录通知、地点、取件码、状态和操作人。
+草案见 [`packages/db/prisma/schema.prisma`](../packages/db/prisma/schema.prisma)。`User`、`Session`、`Account`、`Verification` 满足 Better Auth 基础存储；最终字段需在安装锁定版本的 Better Auth 后用其 CLI 生成结果校对。`Whitelist` 按邮箱或微信身份建立邀请条目，`ExpressPickup` 记录通知、地点、取件码、来源、状态和操作人；`SmsIngest` 持久保存接入原文、去重键、处理状态及关联快递。首次 migration 只创建空表，不做旧库或 Bitable 导入。
 
 - `Whitelist` 的 email / 微信 `appid + openid` 是可选身份键，至少填一种；邀请与绑定在服务端事务中处理。微信 `openid` 只在同一 `appid` 下唯一；若能拿到 `unionid`，用作跨微信应用辅助关联，不能假定每次返回。
 - 取件码不是全局唯一，列表可有相同码；`done-by-code` 只对待取件记录操作，按 `updatedAt DESC, id DESC` 选一条，并在事务内锁定或使用条件更新防止并发重复完成。UI 在多条同码时应显示匹配目标供确认。
 - `doneAt`、`doneById` 只由状态转换写入。按 ID 完成幂等：已完成则返回原记录，不重写完成时间。编辑取件信息会更新 `updatedAt`，不改变状态。删除不在 MVP 范围。
+- 手工创建的 `source=MANUAL` 且 `createdById` 为会话用户；SMS 自动创建的 `source=SMS` 且 `createdById` 为空，通过 `SmsIngest.pickupId` 追溯来源。API 需校验这一约束。短信处理状态是独立流程状态，不等于取件状态。
 - 取件码和原文属于家庭隐私：API 只返回给白名单成员；日志不打印原文、完整取件码和微信临时 `code`。备份按家庭数据处理。
 
 ## 鉴权与白名单
@@ -49,7 +74,25 @@
 | `POST /:id/done` | 按 ID 完成 | 幂等，返回更新后记录 |
 | `POST /done-by-code` | 按码完成 | `{ pickupCode }`；仅匹配待取；无匹配 `404`；同码按最新更新项选取，响应带 `matchedPendingCount` 便于 UI 提醒 |
 
-公共错误：未登录 `401`；未入白名单或被停用 `403 WHITELIST_REQUIRED`；校验失败 `400 VALIDATION_ERROR`；并发状态冲突 `409`。创建/修改约束：`address` 1–200 字、`pickupCode` 1–80 字、`rawInfo` 最多 4000 字；去首尾空格，不自动解析原文。创建可携带 `Idempotency-Key` 防重复点击。旧能力映射为创建、按状态列表、详情、更新、按 ID 完成、按码完成；旧 `taskId` 不迁入新业务模型。
+公共错误：未登录 `401`；未入白名单或被停用 `403 WHITELIST_REQUIRED`；校验失败 `400 VALIDATION_ERROR`；并发状态冲突 `409`。创建/修改约束：`address` 1–200 字、`pickupCode` 1–80 字、`rawInfo` 最多 4000 字；去首尾空格，不自动解析原文。创建可携带 `Idempotency-Key` 防重复点击；返回记录包含 `source`，详情可含 SMS 接收时间和处理记录 ID，原文仅对白名单成员显示。旧能力映射为创建、按状态列表、详情、更新、按 ID 完成、按码完成；旧 `taskId` 不进入新业务模型。
+
+## SMS 接入（MVP）
+
+对齐旧 jarvis 的 iOS 捷径 → `/api/sms/ingest` → AI 分类 → 快递创建链路。旧接口未鉴权、用短期 KV 去重，且后台任务只在进程内运行；新版用独立密钥、PG 持久去重和可恢复 worker 承接这条链路，不复用旧数据。捷径提交正文、发件人、短信接收时间和设备标识；服务端先用规则识别常见取件码/地点，不确定时再用 AI 分类与结构化提取。只对确认是快递取件且地点、取件码满足快递创建约束的结果自动建单。AI 输出按同一契约二次校验，不能直接写库。模型、提示词和阈值在实现阶段用真实样本验证，短信原文不发送到未经选定的第三方服务。
+
+| 方法/对外路径 | 用途 | 关键语义 |
+| --- | --- | --- |
+| `POST /family/api/sms/ingest` | iOS 捷径提交 | 内部路由 `POST /api/sms/ingest`；`Authorization: Bearer <SMS_INGEST_TOKEN>`；请求 `{ content, sender?, receivedAt, device, clientEventId? }`，`receivedAt` 为必填 ISO 8601；入库后 `202 { id, accepted: true, deduped: false }`，重复提交 `200 { id, accepted: true, deduped: true }` |
+| `GET /family/api/sms/ingests?status=&cursor=` | 管理端查看处理记录 | 仅管理员会话及白名单可用；显示来源、时间、状态、关联快递及失败原因，原文仅详情展示 |
+| `GET /family/api/sms/ingests/:id` | 管理端查看详情 | 仅管理员会话及白名单可用；包含原文、处理状态和关联快递 |
+| `POST /family/api/sms/ingests/:id/retry` | 管理端重试 | 仅 `REVIEW` 记录可重试；保留原 ID，不创建第二条短信或快递 |
+| `POST /family/api/sms/ingests/:id/link` | 管理端审核关联 | 请求 `{ pickupId }`；只对 `REVIEW` 记录生效，检查目标快递存在后关联并置 `LINKED_EXISTING`；若需补录，先调用手工创建接口再关联 |
+
+`SMS_INGEST_TOKEN` 是与 Better Auth 密钥、用户 Session 分离的高熵随机密钥，部署时作为服务端环境变量配置，在捷径的 HTTPS 请求头中使用。服务端做恒定时间比较，拒绝无效密钥 `401`，鉴权前按 IP、鉴权后按设备限速并支持密钥轮换；日志、响应和原型均不展示密钥或完整短信。请求校验 `content` 非空且最多 4000 字、`device` 非空且最多 160 字、`sender` 最多 160 字、`clientEventId` 最多 128 字，并拒绝无效或明显未来的接收时间。捷径应为每条短信生成稳定 `clientEventId` 并在重试时复用；服务端以 `(device, clientEventId)` 唯一约束判重，另计算 `SHA-256(规范化设备|发件人|接收时间精确到秒|规范化正文)` 作为 `fingerprint`，PG 唯一约束处理并发重复。没有 `clientEventId` 也能按指纹判重；捷径必须传原短信 `receivedAt`，避免服务端当前时间导致重试失效。相同正文在不同接收时间是不同短信。唯一键命中且内容/指纹一致时返回既有记录，不重新分类或建单；同一个 `clientEventId` 对应不同内容时返回 `409 IDEMPOTENCY_CONFLICT`。
+
+接入事务先持久写 `SmsIngest(RECEIVED)` 再返回 202；后台 worker 从 PG 原子领取 `RECEIVED`，处理成 `PROCESSING`，并在锁定该短信行的事务内创建 `ExpressPickup(source=SMS)`、回填 `pickupId`、置 `CREATED`。worker 重启后可重新领取超时的 `PROCESSING`（以 `updatedAt` 为租期依据）；最终写入事务必须复查该行状态和 `pickupId`，保证过期 worker 与新 worker 不重复建单。多条不同短信可关联同一快递。非快递短信置 `IGNORED`；解析失败、AI 错误、字段缺失或低置信度置 `REVIEW` 并记录不含原文的错误码，不自动创建残缺取件记录。管理员可查看原文、手工补录或重试。`REVIEW` 重试和人工关联通过状态条件更新，已关联或已创建时返回 `409`，避免并发覆盖。
+
+手工录入一直可用，也可将 SMS 审核记录补录成快递并关联 `pickupId`（状态 `LINKED_EXISTING`）。若 SMS 解析结果与现有待取记录的地点及取件码规范化后完全一致且只匹配一条，关联该记录，不覆盖手工内容；多条或不确定匹配转 `REVIEW`，由管理员确认。手工记录的来源保持 `MANUAL`，详情可显示关联短信；短信创建的记录可由家人正常编辑、完成。这样去重针对同一短信，已有手工录入也不会被静默覆盖。
 
 ## 页面信息架构
 
@@ -59,7 +102,7 @@
 
 ### Web 管理端（shadcn blocks 风格）
 
-登录页：简洁表单及无权限提示。管理框架：左侧“快递 / 家庭成员”，顶部家庭名称与账户菜单。快递页为筛选、搜索、列表及右侧详情面板；主按钮“录入快递”，行内“标记已取”，批量操作暂不做。家庭成员页管理白名单、状态与微信绑定（仅管理员）。原型中成员页只展示入口与拦截状态，不模拟真实管理提交。
+登录页：简洁表单及无权限提示。管理框架：左侧“快递 / SMS 接入 / 家庭成员”，顶部家庭名称与账户菜单。快递页为筛选、搜索、列表及右侧详情面板，显示“手工 / 短信自动”来源；主按钮“录入快递”，行内“标记已取”，批量操作暂不做。SMS 接入页仅管理员可见，列出待审核、已创建、已关联、已忽略等处理记录并提供审核/重试入口；另有 iOS 捷径的接入说明，密钥只在安全配置流程中发放。家庭成员页管理白名单、状态与微信绑定（仅管理员）。原型中成员页只展示入口与拦截状态，不模拟真实管理提交。
 
 ## 原型与打开方式
 
@@ -71,9 +114,9 @@
 
 ## 落地阶段
 
-1. **MVP**：建立 `packages/db` 与 migration、`packages/contracts`、API；实现 Better Auth Web 登录、微信小程序登录桥接、白名单门禁；实现六个快递 API；在 Taro 与 Web 接入列表、详情、录入、编辑、按 ID/码完成。以真机验证微信登录、会话续期与失效、白名单撤销。
-2. **下一阶段**：SMS 受信任接入与解析、重复通知去重、通知提醒、成员权限细分、导入旧数据。SMS 入口必须独立认证并具备幂等键，解析结果在写库前校验。
+1. **MVP**：建立 `packages/db` 与 migration、`packages/contracts`、API；实现 Better Auth Web 登录、微信小程序登录桥接、白名单门禁；实现六个快递 API、SMS 独立密钥接入、PG 去重和持久处理、规则/AI 分类、自动建单与管理端审核；在 Taro 与 Web 接入列表、详情、录入、编辑、按 ID/码完成及来源展示。部署到 `share.libms.top/family/`，以真机验证微信登录、会话续期与失效、白名单撤销、短信重复提交和 worker 重启恢复。
+2. **下一阶段**：通知提醒、成员权限细分。
 
 ## 需在 MVP 前定案
 
-微信小程序 `appid` 与服务域名、家庭管理员的初始邮箱及白名单初始化流程；Better Auth/Prisma 具体版本与小程序会话传输方案；旧数据是否导入及导入范围。这些不影响本轮原型评审。
+微信小程序 `appid`、家庭管理员的初始邮箱及白名单初始化流程；Better Auth/Prisma 具体版本与小程序会话传输方案；SMS 分类模型、置信度阈值及密钥发放/轮换流程。服务域名已定为 `share.libms.top`，上线前还需核对现有 nginx `/family/` 路由。这些不影响本轮原型评审。

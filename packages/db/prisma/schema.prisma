@@ -98,10 +98,12 @@ model ExpressPickup {
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
   doneAt        DateTime?
-  createdById   String
+  source        PickupSource @default(MANUAL)
+  createdById   String?
   doneById      String?
-  createdBy     User         @relation("PickupCreatedBy", fields: [createdById], references: [id])
+  createdBy     User?        @relation("PickupCreatedBy", fields: [createdById], references: [id])
   doneBy        User?        @relation("PickupDoneBy", fields: [doneById], references: [id])
+  smsIngests    SmsIngest[]
   @@index([status, createdAt, id])
   @@index([status, pickupCode, updatedAt])
 }
@@ -109,4 +111,38 @@ model ExpressPickup {
 enum PickupStatus {
   PENDING
   DONE
+}
+
+enum PickupSource {
+  MANUAL
+  SMS
+}
+
+// One durable row per SMS. A unique fingerprint makes concurrent retries atomic.
+model SmsIngest {
+  id            String          @id @default(cuid())
+  fingerprint   String          @unique @db.VarChar(64)
+  clientEventId String?         @db.VarChar(128)
+  content       String          @db.Text
+  sender        String?         @db.VarChar(160)
+  receivedAt    DateTime
+  device        String          @db.VarChar(160)
+  status        SmsIngestStatus @default(RECEIVED)
+  errorCode     String?         @db.VarChar(80)
+  pickupId      String?
+  pickup        ExpressPickup?  @relation(fields: [pickupId], references: [id], onDelete: SetNull)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  @@index([status, createdAt])
+  @@index([pickupId])
+  @@unique([device, clientEventId])
+}
+
+enum SmsIngestStatus {
+  RECEIVED
+  PROCESSING
+  CREATED
+  LINKED_EXISTING
+  REVIEW
+  IGNORED
 }
