@@ -72,6 +72,10 @@ jobs:
         if: env.HAS_MINI_KEY == 'true'
       - run: pnpm --filter mini build
         if: env.HAS_MINI_KEY == 'true'
+      - uses: actions/setup-node@v4
+        if: env.HAS_MINI_KEY == 'true'
+        with:
+          node-version: "20"
       - name: Upload mini program
         if: env.HAS_MINI_KEY == 'true'
         env:
@@ -80,4 +84,4 @@ jobs:
           umask 077
           printf '%s\n' "$WECHAT_UPLOAD_PRIVATE_KEY" > /tmp/woshi-upload.key
           trap 'rm -f /tmp/woshi-upload.key' EXIT
-          WECHAT_UPLOAD_PRIVATE_KEY_PATH=/tmp/woshi-upload.key MINI_VERSION=0.0.${{ github.run_number }} pnpm --filter mini upload
+          WECHAT_UPLOAD_PRIVATE_KEY_PATH=/tmp/woshi-upload.key MINI_VERSION=0.0.${{ github.run_number }} node apps/mini/scripts/upload.mjs
