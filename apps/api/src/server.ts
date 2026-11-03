@@ -1,0 +1,182 @@
+import express, { type Request, type Response, type NextFunction } from "express"
+import { db } from "@workspace/db"
+import { pickupInput, pickupPatch, smsInput, whitelistInput } from "@workspace/contracts"
+import { auth } from "./auth.js"
+import { hashPassword } from "better-auth/crypto"
+import { createHash, timingSafeEqual } from "node:crypto"
+import { z } from "zod"
+
+type Handler = (req: Request, res: Response) => Promise<void>
+const run = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => { fn(req,res).catch(next) }
+const app = express()
+app.disable("x-powered-by")
+app.set("trust proxy", "loopback")
+app.use("/api/auth", (req,res,next) => {
+  if (req.path === "/wechat-mini/identity" || req.path === "/wechat-mini/exchange") return next()
+  if (req.path === "/sign-up/email") return res.status(403).json({error:{code:"REGISTRATION_DISABLED",message:"请联系管理员"}})
+  let body = ""
+  req.on("data", chunk => { body += chunk; if (body.length > 20000) req.destroy() })
+  req.on("end", async () => {
+    try {
+      if (req.path === "/sign-in/email" && req.method === "POST") {
+        const email = String(JSON.parse(body).email || "").toLowerCase()
+        const white = await db.whitelist.findUnique({where:{email}})
+        if (!white?.enabled) return res.status(403).json({error:{code:"WHITELIST_REQUIRED",message:"未加入家庭白名单"}})
+      }
+      const base = process.env.BETTER_AUTH_URL || "http://localhost:3001/api/auth"
+      const request = new Request(`${base}${req.url}`, {method:req.method,headers:req.headers as HeadersInit,...(["GET","HEAD"].includes(req.method)?{}:{body})})
+      const response = await auth.handler(request)
+      res.status(response.status)
+      response.headers.forEach((value,key)=>{if(key!=="set-cookie")res.setHeader(key,value)})
+      const cookies=response.headers.getSetCookie();if(cookies.length)res.setHeader("set-cookie",cookies)
+      res.end(Buffer.from(await response.arrayBuffer()))
+    } catch { res.status(400).json({error:{code:"VALIDATION_ERROR",message:"请求无效"}}) }
+  })
+})
+app.use(express.json({limit:"16kb"}))
+const fail = (res:Response,status:number,code:string,message:string) => res.status(status).json({error:{code,message}})
+const smallRate = new Map<string,{n:number,t:number}>()
+function limited(key:string, max:number, ms:number){const now=Date.now(),v=smallRate.get(key); if(!v||v.t<now){smallRate.set(key,{n:1,t:now+ms});return false} v.n++; return v.n>max}
+async function principal(req:Request,res:Response,admin=false){
+  const session = await auth.api.getSession({headers:new Headers(req.headers as HeadersInit)})
+  if(!session) {fail(res,401,"UNAUTHENTICATED","请先登录");return null}
+  const white = await db.whitelist.findFirst({where:{userId:session.user.id,enabled:true}})
+  if(!white) {fail(res,403,"WHITELIST_REQUIRED","未加入家庭白名单");return null}
+  if(admin&&white.role!=="ADMIN") {fail(res,403,"ADMIN_REQUIRED","仅管理员可操作");return null}
+  return {user:session.user,white}
+}
+const miniId = process.env.WECHAT_MINI_APPID || "wxce94463a6a805e99"
+async function wechat(code:string){
+  if(!process.env.WECHAT_MINI_SECRET) throw new Error("WECHAT_NOT_CONFIGURED")
+  const url = new URL("https://api.weixin.qq.com/sns/jscode2session")
+  url.searchParams.set("appid",miniId);url.searchParams.set("secret",process.env.WECHAT_MINI_SECRET)
+  url.searchParams.set("js_code",code);url.searchParams.set("grant_type","authorization_code")
+  const r=await fetch(url);const data=await r.json() as {openid?:string;unionid?:string;errcode?:number}
+  if(!r.ok||data.errcode||!data.openid) throw new Error("WECHAT_CODE_INVALID")
+  return {openid:data.openid,unionid:data.unionid}
+}
+app.post("/api/auth/wechat-mini/identity",run(async(req,res)=>{
+  if(limited(`identity:${req.ip}`,10,60000)) {fail(res,429,"RATE_LIMITED","请稍后再试");return}
+  const parsed=z.object({code:z.string().min(1).max(200)}).safeParse(req.body)
+  if(!parsed.success){fail(res,400,"VALIDATION_ERROR","微信 code 无效");return}
+  try {const id=await wechat(parsed.data.code);res.json({appid:miniId,openid:id.openid,unionid:id.unionid||null})} catch {fail(res,400,"WECHAT_CODE_INVALID","微信登录凭据已失效，请重试")}
+}))
+app.post("/api/auth/wechat-mini/exchange",run(async(req,res)=>{
+  if(limited(`exchange:${req.ip}`,10,60000)) {fail(res,429,"RATE_LIMITED","请稍后再试");return}
+  const parsed=z.object({code:z.string().min(1).max(200)}).safeParse(req.body)
+  if(!parsed.success){fail(res,400,"VALIDATION_ERROR","微信 code 无效");return}
+  let id:Awaited<ReturnType<typeof wechat>>
+  try{id=await wechat(parsed.data.code)}catch{fail(res,400,"WECHAT_CODE_INVALID","微信登录凭据已失效，请重试");return}
+  const white=await db.whitelist.findFirst({where:{enabled:true,OR:[{wechatAppId:miniId,wechatOpenId:id.openid},...(id.unionid?[{wechatUnionId:id.unionid}]:[])]}})
+  if(!white){fail(res,403,"WHITELIST_REQUIRED","请先把身份发给管理员加入白名单");return}
+  const userId=await db.$transaction(async tx=>{
+    const row=await tx.whitelist.findUnique({where:{id:white.id}})
+    if(!row?.enabled) throw new Error("WHITELIST_REQUIRED")
+    if(!row.wechatOpenId)await tx.whitelist.update({where:{id:row.id},data:{wechatAppId:miniId,wechatOpenId:id.openid,wechatUnionId:id.unionid||row.wechatUnionId}})
+    let uid=row.userId
+    if(!uid){const user=await tx.user.create({data:{name:row.displayName,email:`wx-${miniId}-${id.openid}@invalid.local`}});uid=user.id;await tx.whitelist.update({where:{id:row.id},data:{userId:uid}})}
+    const account=await tx.account.findUnique({where:{providerId_accountId:{providerId:`wechat-mini:${miniId}`,accountId:id.openid}}})
+    if(account && account.userId!==uid)throw new Error("IDENTITY_CONFLICT")
+    if(!account)await tx.account.create({data:{providerId:`wechat-mini:${miniId}`,accountId:id.openid,userId:uid}})
+    return uid
+  })
+  const context=await auth.$context
+  const session=await context.internalAdapter.createSession(userId,false)
+  res.json({token:session.token,expiresAt:session.expiresAt.toISOString()})
+}))
+app.get("/api/me",run(async(req,res)=>{const p=await principal(req,res);if(p)res.json({user:{id:p.user.id,email:p.user.email,name:p.user.name},role:p.white.role})}))
+app.post("/api/logout",run(async(req,res)=>{const p=await principal(req,res);if(!p)return;const token=req.headers.authorization?.replace(/^Bearer /i,"");if(token)await db.session.deleteMany({where:{token,userId:p.user.id}});res.json({ok:true})}))
+const base="/api/express/pickups"
+app.post(base,run(async(req,res)=>{const p=await principal(req,res);if(!p)return;const v=pickupInput.safeParse(req.body);if(!v.success){fail(res,400,"VALIDATION_ERROR","快递信息无效");return}
+  const key=req.get("Idempotency-Key")
+  if(key && key.length>128){fail(res,400,"VALIDATION_ERROR","幂等键过长");return}
+  if(key){const prior=await db.expressPickup.findUnique({where:{createdById_idempotencyKey:{createdById:p.user.id,idempotencyKey:key}}});if(prior){if(prior.address!==v.data.address||prior.pickupCode!==v.data.pickupCode){fail(res,409,"IDEMPOTENCY_CONFLICT","幂等键对应不同快递");return}res.json(prior);return}}
+  try{const row=await db.expressPickup.create({data:{...v.data,source:"MANUAL",createdById:p.user.id,idempotencyKey:key}});res.status(201).json(row)}catch(e){if(key){const prior=await db.expressPickup.findUnique({where:{createdById_idempotencyKey:{createdById:p.user.id,idempotencyKey:key}}});if(prior){res.json(prior);return}}throw e}
+
+}))
+app.get(base,run(async(req,res)=>{const p=await principal(req,res);if(!p)return;const status=req.query.status==="DONE"?"DONE":"PENDING";const q=String(req.query.q||"").trim();const limit=Math.min(Math.max(Number(req.query.limit)||20,1),100);let cursor: {createdAt:string;id:string}|undefined
+  try{if(req.query.cursor)cursor=JSON.parse(Buffer.from(String(req.query.cursor),"base64url").toString())}catch{fail(res,400,"VALIDATION_ERROR","游标无效");return}
+  const conditions:any[]=[{status}]
+  if(q)conditions.push({OR:[{address:{contains:q,mode:"insensitive"}},{pickupCode:{contains:q,mode:"insensitive"}}]})
+  if(cursor)conditions.push({OR:[{createdAt:{lt:new Date(cursor.createdAt)}},{createdAt:new Date(cursor.createdAt),id:{lt:cursor.id}}]})
+  const items=await db.expressPickup.findMany({where:{AND:conditions},orderBy:[{createdAt:"desc"},{id:"desc"}],take:limit+1})
+  const hasMore=items.length>limit;const list=items.slice(0,limit);const last=list.at(-1);res.json({items:list,nextCursor:hasMore&&last?Buffer.from(JSON.stringify({createdAt:last.createdAt,id:last.id})).toString("base64url"):null})
+}))
+app.post(`${base}/done-by-code`,run(async(req,res)=>{const p=await principal(req,res);if(!p)return;const code=z.string().trim().min(1).max(80).safeParse(req.body?.pickupCode);if(!code.success){fail(res,400,"VALIDATION_ERROR","取件码无效");return}
+ const result=await db.$transaction(async tx=>{const rows=await tx.$queryRaw<Array<{id:string}>>`SELECT id FROM "ExpressPickup" WHERE status='PENDING' AND "pickupCode"=${code.data} ORDER BY "updatedAt" DESC,id DESC FOR UPDATE`;if(!rows.length)return null;const row=await tx.expressPickup.update({where:{id:rows[0].id},data:{status:"DONE",doneAt:new Date(),doneById:p.user.id}});return {row,count:rows.length}})
+ if(!result){fail(res,404,"NOT_FOUND","没有待取快递");return}res.json({...result.row,matchedPendingCount:result.count})
+}))
+app.get(`${base}/:id`,run(async(req,res)=>{const p=await principal(req,res);if(!p)return;const row=await db.expressPickup.findUnique({where:{id:String(req.params.id)},include:{smsIngests:{select:{id:true,receivedAt:true,status:true}}}});if(!row){fail(res,404,"NOT_FOUND","快递不存在");return}res.json(row)}))
+app.patch(`${base}/:id`,run(async(req,res)=>{const p=await principal(req,res);if(!p)return;const v=pickupPatch.safeParse(req.body);if(!v.success){fail(res,400,"VALIDATION_ERROR","修改内容无效");return}const row=await db.expressPickup.findUnique({where:{id:String(req.params.id)}});if(!row){fail(res,404,"NOT_FOUND","快递不存在");return}res.json(await db.expressPickup.update({where:{id:row.id},data:v.data}))}))
+app.post(`${base}/:id/done`,run(async(req,res)=>{const p=await principal(req,res);if(!p)return;const id=String(req.params.id);const row=await db.expressPickup.findUnique({where:{id}});if(!row){fail(res,404,"NOT_FOUND","快递不存在");return}if(row.status==="DONE"){res.json(row);return}await db.expressPickup.updateMany({where:{id,status:"PENDING"},data:{status:"DONE",doneAt:new Date(),doneById:p.user.id}});res.json(await db.expressPickup.findUnique({where:{id}}))}))
+const constantToken=(given:string,expected:string)=>{const a=Buffer.from(given),b=Buffer.from(expected);return a.length===b.length&&timingSafeEqual(a,b)}
+const fingerprint=(v:z.infer<typeof smsInput>)=>createHash("sha256").update([v.device.trim().toLowerCase(),(v.sender||"").trim().toLowerCase(),new Date(v.receivedAt).toISOString().slice(0,19),v.content.trim().replace(/\s+/g," ")].join("|"),"utf8").digest("hex")
+app.post("/api/sms/ingest",run(async(req,res)=>{
+ if(limited(`sms-ip:${req.ip}`,60,60000)){fail(res,429,"RATE_LIMITED","请求过于频繁");return}
+ const secret=process.env.SMS_INGEST_TOKEN||"";const given=req.headers.authorization?.replace(/^Bearer /i,"")||""
+ if(!secret||!constantToken(given,secret)){fail(res,401,"UNAUTHENTICATED","无效凭据");return}
+ const v=smsInput.safeParse(req.body);if(!v.success||new Date(v.data.receivedAt).getTime()>Date.now()+300000){fail(res,400,"VALIDATION_ERROR","短信数据无效");return}
+ if(limited(`sms-device:${v.data.device}`,120,60000)){fail(res,429,"RATE_LIMITED","设备请求过于频繁");return}
+ const hash=fingerprint(v.data)
+ if(v.data.clientEventId){const existing=await db.smsIngest.findUnique({where:{device_clientEventId:{device:v.data.device,clientEventId:v.data.clientEventId}}});if(existing){if(existing.fingerprint!==hash){fail(res,409,"IDEMPOTENCY_CONFLICT","事件 ID 已用于另一条短信");return}res.status(200).json({id:existing.id,accepted:true,deduped:true});return}}
+ try{const row=await db.smsIngest.create({data:{...v.data,receivedAt:new Date(v.data.receivedAt),fingerprint:hash}});res.status(202).json({id:row.id,accepted:true,deduped:false})}
+ catch{const existing=await db.smsIngest.findUnique({where:{fingerprint:hash}});if(existing){res.status(200).json({id:existing.id,accepted:true,deduped:true});return}fail(res,409,"IDEMPOTENCY_CONFLICT","重复事件冲突")}
+}))
+app.get("/api/sms/ingests",run(async(req,res)=>{const p=await principal(req,res,true);if(!p)return;const status=String(req.query.status||"");let cursor:{createdAt:string;id:string}|undefined;try{if(req.query.cursor)cursor=JSON.parse(Buffer.from(String(req.query.cursor),"base64url").toString())}catch{fail(res,400,"VALIDATION_ERROR","游标无效");return}const filters:any[]=[];if(status&&["RECEIVED","PROCESSING","CREATED","LINKED_EXISTING","REVIEW","IGNORED"].includes(status))filters.push({status});if(cursor)filters.push({OR:[{createdAt:{lt:new Date(cursor.createdAt)}},{createdAt:new Date(cursor.createdAt),id:{lt:cursor.id}}]});const rows=await db.smsIngest.findMany({where:{AND:filters},select:{id:true,sender:true,device:true,receivedAt:true,status:true,errorCode:true,pickupId:true,createdAt:true,updatedAt:true},orderBy:[{createdAt:"desc"},{id:"desc"}],take:51});const items=rows.slice(0,50);const last=items.at(-1);res.json({items,nextCursor:rows.length>50&&last?Buffer.from(JSON.stringify({createdAt:last.createdAt,id:last.id})).toString("base64url"):null})}))
+app.get("/api/sms/ingests/:id",run(async(req,res)=>{const p=await principal(req,res,true);if(!p)return;const row=await db.smsIngest.findUnique({where:{id:String(req.params.id)}});if(!row){fail(res,404,"NOT_FOUND","短信不存在");return}res.json(row)}))
+app.post("/api/sms/ingests/:id/retry",run(async(req,res)=>{const p=await principal(req,res,true);if(!p)return;const id=String(req.params.id);const changed=await db.smsIngest.updateMany({where:{id,status:"REVIEW",pickupId:null},data:{status:"RECEIVED",errorCode:null}});if(!changed.count){fail(res,409,"STATE_CONFLICT","只有待审核记录可重试");return}res.json(await db.smsIngest.findUnique({where:{id}}))}))
+app.post("/api/sms/ingests/:id/link",run(async(req,res)=>{const p=await principal(req,res,true);if(!p)return;const id=String(req.params.id);const pickupId=z.string().min(1).safeParse(req.body?.pickupId);if(!pickupId.success){fail(res,400,"VALIDATION_ERROR","快递 ID 无效");return}const pickup=await db.expressPickup.findUnique({where:{id:pickupId.data}});if(!pickup){fail(res,404,"NOT_FOUND","快递不存在");return}const changed=await db.smsIngest.updateMany({where:{id,status:"REVIEW",pickupId:null},data:{status:"LINKED_EXISTING",pickupId:pickup.id,errorCode:null}});if(!changed.count){fail(res,409,"STATE_CONFLICT","记录状态已变化");return}res.json(await db.smsIngest.findUnique({where:{id}}))}))
+app.get("/api/whitelist",run(async(req,res)=>{const p=await principal(req,res,true);if(!p)return;const items=await db.whitelist.findMany({orderBy:{createdAt:"asc"}});res.json({items})}))
+app.post("/api/whitelist",run(async(req,res)=>{const p=await principal(req,res,true);if(!p)return;const v=whitelistInput.safeParse(req.body);if(!v.success){fail(res,400,"VALIDATION_ERROR","白名单内容无效");return}const row=await db.whitelist.create({data:v.data});res.status(201).json(row)}))
+app.post("/api/whitelist/:id/set-password",run(async(req,res)=>{
+ const p=await principal(req,res,true);if(!p)return
+ const parsed=z.object({password:z.string().min(16).max(128)}).safeParse(req.body)
+ if(!parsed.success){fail(res,400,"VALIDATION_ERROR","密码至少 16 位");return}
+ const id=String(req.params.id)
+ await db.$transaction(async tx=>{
+  const white=await tx.whitelist.findUnique({where:{id}})
+  if(!white?.email||!white.enabled)throw new Error("MEMBER_NOT_FOUND")
+  let userId=white.userId
+  if(!userId){const user=await tx.user.upsert({where:{email:white.email},create:{email:white.email,name:white.displayName,emailVerified:true},update:{}});userId=user.id;await tx.whitelist.update({where:{id},data:{userId}})}
+  const password=await hashPassword(parsed.data.password)
+  await tx.account.upsert({where:{providerId_accountId:{providerId:"credential",accountId:userId}},create:{providerId:"credential",accountId:userId,userId,password},update:{password}})
+ })
+ res.json({ok:true})
+}))
+app.patch("/api/whitelist/:id",run(async(req,res)=>{const p=await principal(req,res,true);if(!p)return;const v=whitelistInput.partial().safeParse(req.body);if(!v.success){fail(res,400,"VALIDATION_ERROR","白名单内容无效");return}const id=String(req.params.id);const row=await db.whitelist.findUnique({where:{id}});if(!row){fail(res,404,"NOT_FOUND","成员不存在");return}if(row.userId===p.user.id&&v.data.enabled===false){fail(res,409,"STATE_CONFLICT","不能停用自己");return}res.json(await db.whitelist.update({where:{id},data:v.data}))}))
+
+type Extracted={isPickup:boolean;address?:string;pickupCode?:string;confidence:number}
+function ruleExtract(content:string):Extracted|null{
+ const code=content.match(/(?:取件码|提货码|凭码|取货码)[：:\s]*([A-Za-z0-9-]{4,30})/)
+ const address=content.match(/(?:请至|到|存放在|存于|已到|放在)([^，。；;\n]{2,80}?)(?:取件|领取|，|。|；|;|$)/)
+ if(code&&address)return {isPickup:true,pickupCode:code[1],address:address[1].trim(),confidence:0.8}
+ if(!/(快递|包裹|取件|驿站|菜鸟|丰巢)/.test(content))return {isPickup:false,confidence:0.9}
+ return null
+}
+async function aiExtract(content:string):Promise<Extracted>{
+ const key=process.env.SMS_AI_API_KEY;if(!key)throw new Error("AI_NOT_CONFIGURED")
+ const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),15000)
+ try{const r=await fetch(`${process.env.SMS_AI_BASE_URL||"https://token.libms.top/v1"}/chat/completions`,{method:"POST",headers:{Authorization:`Bearer ${key}`,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.SMS_AI_MODEL||"deepseek-flash",temperature:0,response_format:{type:"json_object"},messages:[{role:"system",content:"将短信分类并提取快递取件信息。只返回 JSON: isPickup(boolean), address(string), pickupCode(string), confidence(0-1)。无法确认就降低置信度。"},{role:"user",content}]}),signal:controller.signal});if(!r.ok)throw new Error("AI_HTTP_ERROR");const raw=await r.json() as {choices?:Array<{message?:{content?:string}}>};const parsed=JSON.parse(raw.choices?.[0]?.message?.content||"{}");return z.object({isPickup:z.boolean(),address:z.string().max(200).optional(),pickupCode:z.string().max(80).optional(),confidence:z.number().min(0).max(1)}).parse(parsed)}finally{clearTimeout(timeout)}
+}
+async function processSms(id:string){
+ const item=await db.smsIngest.findUnique({where:{id}});if(!item||item.status!=="PROCESSING")return
+ let out:Extracted
+ try{out=ruleExtract(item.content)||await aiExtract(item.content)}catch(e){await db.smsIngest.updateMany({where:{id,status:"PROCESSING"},data:{status:"REVIEW",errorCode:e instanceof Error&&e.message==="AI_NOT_CONFIGURED"?"AI_NOT_CONFIGURED":"AI_FAILED"}});return}
+ if(!out.isPickup){await db.smsIngest.updateMany({where:{id,status:"PROCESSING"},data:{status:"IGNORED"}});return}
+ const address=out.address?.trim(),pickupCode=out.pickupCode?.trim()
+ if(!address||!pickupCode||out.confidence<0.75){await db.smsIngest.updateMany({where:{id,status:"PROCESSING"},data:{status:"REVIEW",errorCode:"LOW_CONFIDENCE"}});return}
+ await db.$transaction(async tx=>{
+  const rows=await tx.$queryRaw<Array<{id:string;status:string;pickupId:string|null}>>`SELECT id,status,"pickupId" FROM "SmsIngest" WHERE id=${id} FOR UPDATE`
+  if(rows[0]?.status!=="PROCESSING"||rows[0].pickupId)return
+  const matches=await tx.expressPickup.findMany({where:{status:"PENDING",address:{equals:address,mode:"insensitive"},pickupCode:{equals:pickupCode,mode:"insensitive"}},take:2})
+  if(matches.length>1){await tx.smsIngest.update({where:{id},data:{status:"REVIEW",errorCode:"AMBIGUOUS_MATCH"}});return}
+  if(matches.length===1){await tx.smsIngest.update({where:{id},data:{status:"LINKED_EXISTING",pickupId:matches[0].id,errorCode:null}});return}
+  const pickup=await tx.expressPickup.create({data:{address,pickupCode,rawInfo:item.content,source:"SMS"}})
+  await tx.smsIngest.update({where:{id},data:{status:"CREATED",pickupId:pickup.id,errorCode:null}})
+ })
+}
+async function worker(){try{const stale=new Date(Date.now()-5*60_000);const rows=await db.$queryRaw<Array<{id:string}>>`UPDATE "SmsIngest" SET status='PROCESSING',"updatedAt"=now() WHERE id IN (SELECT id FROM "SmsIngest" WHERE status='RECEIVED' OR (status='PROCESSING' AND "updatedAt"<${stale}) ORDER BY "createdAt" LIMIT 5 FOR UPDATE SKIP LOCKED) RETURNING id`;for(const row of rows)await processSms(row.id)}catch{console.error("SMS worker cycle failed")}}
+app.get("/api/health",run(async(_req,res)=>{await db.$queryRaw`SELECT 1`;res.json({ok:true})}))
+app.use((err:unknown,_req:Request,res:Response,_next:NextFunction)=>{console.error("API request failed",err instanceof Error?err.name:"unknown");if(!res.headersSent)fail(res,500,"INTERNAL_ERROR","服务暂不可用")})
+const port=Number(process.env.PORT||3001)
+app.listen(port,"127.0.0.1",()=>{console.log(`API listening on ${port}`);setInterval(worker,5000).unref();void worker()})

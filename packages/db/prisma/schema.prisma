@@ -5,7 +5,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -78,9 +77,9 @@ model Whitelist {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  // Application validation requires an email or an appid+openid pair.
+  // Application validation requires email, appid+openid, or unionid.
   @@unique([wechatAppId, wechatOpenId])
-  @@index([wechatUnionId])
+  @@unique([wechatUnionId])
 }
 
 enum FamilyRole {
@@ -90,6 +89,7 @@ enum FamilyRole {
 
 model ExpressPickup {
   id            String       @id @default(cuid())
+  idempotencyKey String?      @db.VarChar(128)
   rawInfo       String?      @db.Text
   address       String       @db.VarChar(200)
   pickupCode    String       @db.VarChar(80)
@@ -106,6 +106,7 @@ model ExpressPickup {
   smsIngests    SmsIngest[]
   @@index([status, createdAt, id])
   @@index([status, pickupCode, updatedAt])
+  @@unique([createdById, idempotencyKey])
 }
 
 enum PickupStatus {
@@ -136,6 +137,13 @@ model SmsIngest {
   @@index([status, createdAt])
   @@index([pickupId])
   @@unique([device, clientEventId])
+}
+
+model RateLimit {
+  id        String @id @default(cuid())
+  key       String @unique
+  count     Int
+  lastRequest BigInt
 }
 
 enum SmsIngestStatus {

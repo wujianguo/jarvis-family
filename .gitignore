@@ -23,6 +23,7 @@ dist
 
 # turbo
 .turbo
+.swc/
 
 # misc
 .DS_Store
