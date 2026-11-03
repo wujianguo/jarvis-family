@@ -20,7 +20,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: DATABASE_URL=postgresql://x:x@localhost:5432/x pnpm --filter @workspace/db generate
       - run: pnpm --filter @workspace/contracts typecheck && pnpm --filter @workspace/db typecheck && pnpm --filter api typecheck && pnpm --filter mini typecheck && pnpm --filter web typecheck
-      - run: pnpm --filter mini build && pnpm --filter web build
+      - run: pnpm --filter mini build && pnpm --filter web build && pnpm --filter api build
       - name: Upload mini program
         if: ${{ env.HAS_MINI_KEY == 'true' }}
         env:
@@ -43,6 +43,8 @@ jobs:
         run: |
           release="/home/ecs-user/woshi/releases/${GITHUB_SHA}"
           ssh ecs-user@101.200.151.162 "mkdir -p '$release'"
-          git archive HEAD apps packages scripts package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.json .npmrc .gitignore | ssh ecs-user@101.200.151.162 "tar -x -C '$release'"
+          tar -czf /tmp/woshi-release.tar.gz --exclude='*/node_modules' --exclude='apps/mini/dist' --exclude='apps/mini/.swc' --exclude='apps/web/.next/cache' apps packages scripts package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.json .npmrc .gitignore
+          scp /tmp/woshi-release.tar.gz ecs-user@101.200.151.162:/tmp/woshi-release.tar.gz
+          ssh ecs-user@101.200.151.162 "tar -xzf /tmp/woshi-release.tar.gz -C '$release'"
           ssh ecs-user@101.200.151.162 "bash '$release/scripts/deploy-remote.sh' '$release'"
           curl -fsS https://share.libms.top/family/api/health

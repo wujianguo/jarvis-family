@@ -8,7 +8,8 @@ set -a
 set +a
 cd "$release_dir"
 export npm_config_registry=https://registry.npmmirror.com
-pnpm install --filter api... --filter web... --frozen-lockfile --registry=https://registry.npmmirror.com
+export NODE_OPTIONS=--max-old-space-size=768
+pnpm install --filter api... --filter web... --frozen-lockfile --registry=https://registry.npmmirror.com --network-concurrency=2 --child-concurrency=1
 pnpm --filter @workspace/db generate
 pnpm --filter @workspace/db migrate
 if [[ ! -f "$root_dir/.admin-seeded" ]]; then
@@ -18,8 +19,8 @@ if [[ ! -f "$root_dir/.admin-seeded" ]]; then
   touch "$root_dir/.admin-seeded"
   unset ADMIN_INITIAL_PASSWORD
 fi
-pnpm --filter api build
-pnpm --filter web build
+if [[ ! -f apps/api/dist/server.js ]]; then pnpm --filter api build; fi
+if [[ ! -f apps/web/.next/BUILD_ID ]]; then pnpm --filter web build; fi
 ln -sfn "$release_dir" "$root_dir/current.new"
 mv -Tf "$root_dir/current.new" "$root_dir/current"
 sudo systemctl restart woshi-api woshi-web
