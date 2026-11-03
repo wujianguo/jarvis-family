@@ -44,11 +44,11 @@ jobs:
           ssh ecs-user@101.200.151.162 "bash '$release/scripts/deploy-remote.sh' '$release'"
           curl -fsS https://share.libms.top/family/api/health
       - uses: actions/setup-node@v4
-        if: ${{ env.HAS_MINI_KEY == 'true' }}
+        if: ${{ !cancelled() && env.HAS_MINI_KEY == 'true' }}
         with:
           node-version: '20'
       - name: Upload mini program
-        if: ${{ env.HAS_MINI_KEY == 'true' }}
+        if: ${{ !cancelled() && env.HAS_MINI_KEY == 'true' }}
         env:
           WECHAT_UPLOAD_PRIVATE_KEY: ${{ secrets.WECHAT_UPLOAD_PRIVATE_KEY }}
         run: |
