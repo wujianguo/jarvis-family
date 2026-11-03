@@ -1,12 +1,11 @@
 # 窝事部署
 
-主分支推送后，GitHub Actions 类型检查、构建 Web 与小程序、通过 SSH 将该提交部署到 ECS。若提供 `WECHAT_UPLOAD_PRIVATE_KEY`，同时上传微信小程序体验版。
+主分支推送后，GitHub Actions 类型检查、构建 Web 与 API，并通过 SSH 将该提交部署到 ECS。小程序由独立仓库 `jarvis-family-mini` 管理。
 
 ## GitHub Actions secrets
 
 - `DEPLOY_SSH_KEY`：仅限 CI 使用的 ECS SSH 私钥。
 - `DEPLOY_KNOWN_HOSTS`：ECS 的 SSH 主机公钥行（通过可信渠道核对指纹后录入）。
-- `WECHAT_UPLOAD_PRIVATE_KEY`：微信公众平台小程序代码上传私钥。缺失时 CI 跳过上传。
 
 ## ECS 本地环境
 

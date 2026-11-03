@@ -1,5 +1,6 @@
 packages:
-  - "apps/*"
+  - "apps/api"
+  - "apps/web"
   - "packages/*"
 
 allowBuilds:
@@ -8,39 +9,6 @@ allowBuilds:
   unrs-resolver: true
   msw: false
   prisma: true
-  '@prisma/engines': true
-  '@parcel/watcher': true
-  '@swc/core': true
-  '@tarojs/binding': true
-  '@tarojs/cli': true
-  core-js: true
-  less: true
-  protobufjs: true
-
-minimumReleaseAgeExclude:
-  - '@tarojs/api@4.3.2'
-  - '@tarojs/binding-darwin-arm64@4.3.2'
-  - '@tarojs/binding-darwin-x64@4.3.2'
-  - '@tarojs/binding-linux-arm64-gnu@4.3.2'
-  - '@tarojs/binding-linux-x64-gnu@4.3.2'
-  - '@tarojs/binding-win32-x64-msvc@4.3.2'
-  - '@tarojs/binding@4.3.2'
-  - '@tarojs/cli@4.3.2'
-  - '@tarojs/components@4.3.2'
-  - '@tarojs/helper@4.3.2'
-  - '@tarojs/plugin-framework-react@4.3.2'
-  - '@tarojs/plugin-platform-weapp@4.3.2'
-  - '@tarojs/react@4.3.2'
-  - '@tarojs/runner-utils@4.3.2'
-  - '@tarojs/runtime@4.3.2'
-  - '@tarojs/service@4.3.2'
-  - '@tarojs/shared@4.3.2'
-  - '@tarojs/taro-loader@4.3.2'
-  - '@tarojs/taro@4.3.2'
-  - '@tarojs/webpack5-prebundle@4.3.2'
-  - '@tarojs/webpack5-runner@4.3.2'
-  - postcss-html-transform@4.3.2
-  - postcss-plugin-constparse@4.3.2
-  - postcss-pxtransform@4.3.2
-  - '@tarojs/vite-runner@4.3.2'
-  - babel-plugin-transform-taroapi@4.3.2
+  "@prisma/engines": true
+  "@parcel/watcher": true
+  "@swc/core": true

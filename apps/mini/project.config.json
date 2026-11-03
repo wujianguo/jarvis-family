@@ -1,7 +1,0 @@
-{
-  "appid": "wxce94463a6a805e99",
-  "projectname": "窝事",
-  "miniprogramRoot": "dist/",
-  "compileType": "miniprogram",
-  "setting": { "es6": true, "minified": true, "postcss": true }
-}

@@ -6,6 +6,7 @@
 - [交互演示](prototypes/index.html)：浏览器直接打开或访问 https://share.libms.top/jarvis-family/，切换 Web / 小程序
 - [设计画布](designs/express-v1/project/canvas.json)：`node .agents/skills/claude-design/scripts/artifact.mjs open designs/express-v1`
 - [设计系统](designs/family-system/project/design-system.json)：`node .agents/skills/claude-design-system/scripts/artifact.mjs open designs/family-system`
+- [窝事小程序独立仓库](https://github.com/wujianguo/jarvis-family-mini)：源码、构建和体验版上传 CI 在此维护。
 
 交互演示使用浏览器内的虚构数据，刷新后重置；尚未连接 API 或微信登录。
 
