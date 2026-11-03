@@ -1,0 +1,17 @@
+services:
+  api:
+    image: woshi-api:${WOSHI_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    network_mode: host
+    env_file: .env
+    environment:
+      PORT: "3001"
+      HOST: 127.0.0.1
+  web:
+    image: woshi-web:${WOSHI_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    network_mode: host
+    env_file: .env
+    environment:
+      PORT: "3000"
+      HOSTNAME: 127.0.0.1

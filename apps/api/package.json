@@ -26,5 +26,9 @@
     "typescript": "^7.0.2",
     "@workspace/eslint-config": "workspace:*",
     "eslint": "^10"
-  }
+  },
+  "files": [
+    "dist",
+    "src"
+  ]
 }

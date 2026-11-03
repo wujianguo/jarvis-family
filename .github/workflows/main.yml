@@ -4,16 +4,13 @@ on:
     branches: [main]
   workflow_dispatch:
 jobs:
-  deploy:
+  checks:
     runs-on: ubuntu-latest
-    concurrency: production
-    env:
-      HAS_MINI_KEY: ${{ secrets.WECHAT_UPLOAD_PRIVATE_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "24"
       - uses: pnpm/action-setup@v4
         with:
           version: 11.25.0
@@ -23,6 +20,18 @@ jobs:
       - run: DATABASE_URL=postgresql://x:x@localhost:5432/x pnpm --filter @workspace/db generate
       - run: pnpm --filter @workspace/contracts typecheck && pnpm --filter @workspace/db typecheck && pnpm --filter api typecheck && pnpm --filter mini typecheck && pnpm --filter web typecheck
       - run: pnpm --filter mini build && pnpm --filter web build && pnpm --filter api build
+
+  deploy:
+    needs: checks
+    runs-on: ubuntu-latest
+    concurrency: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build container images
+        run: |
+          docker build -f apps/api/Dockerfile -t "woshi-api:${GITHUB_SHA}" .
+          docker build -f apps/web/Dockerfile -t "woshi-web:${GITHUB_SHA}" .
+          docker save "woshi-api:${GITHUB_SHA}" "woshi-web:${GITHUB_SHA}" | gzip -1 > /tmp/woshi-images.tar.gz
       - name: Configure SSH
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -36,19 +45,35 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
       - name: Deploy to ECS
         run: |
-          release="/home/ecs-user/woshi/releases/${GITHUB_SHA}"
-          ssh ecs-user@101.200.151.162 "mkdir -p '$release'"
-          tar -czf /tmp/woshi-release.tar.gz --exclude='*/node_modules' --exclude='apps/mini/dist' --exclude='apps/mini/.swc' --exclude='apps/web/.next/cache' apps packages scripts package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.json .npmrc .gitignore
-          scp /tmp/woshi-release.tar.gz ecs-user@101.200.151.162:/tmp/woshi-release.tar.gz
-          ssh ecs-user@101.200.151.162 "tar -xzf /tmp/woshi-release.tar.gz -C '$release'"
-          ssh ecs-user@101.200.151.162 "bash '$release/scripts/deploy-remote.sh' '$release'"
+          archive="/tmp/woshi-images-${GITHUB_SHA}.tar.gz"
+          scp /tmp/woshi-images.tar.gz "ecs-user@101.200.151.162:${archive}"
+          scp compose.yaml scripts/deploy-container.sh ecs-user@101.200.151.162:/home/ecs-user/woshi/
+          ssh ecs-user@101.200.151.162 "bash /home/ecs-user/woshi/deploy-container.sh '${archive}' '${GITHUB_SHA}'"
           curl -fsS https://share.libms.top/family/api/health
+          curl -fsS -o /dev/null https://share.libms.top/family/
+
+  upload-mini:
+    needs: checks
+    runs-on: ubuntu-latest
+    env:
+      HAS_MINI_KEY: ${{ secrets.WECHAT_UPLOAD_PRIVATE_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.HAS_MINI_KEY == 'true'
       - uses: actions/setup-node@v4
-        if: ${{ !cancelled() && env.HAS_MINI_KEY == 'true' }}
+        if: env.HAS_MINI_KEY == 'true'
         with:
-          node-version: '20'
+          node-version: "20"
+      - uses: pnpm/action-setup@v4
+        if: env.HAS_MINI_KEY == 'true'
+        with:
+          version: 11.25.0
+      - run: pnpm install --frozen-lockfile
+        if: env.HAS_MINI_KEY == 'true'
+      - run: pnpm --filter mini build
+        if: env.HAS_MINI_KEY == 'true'
       - name: Upload mini program
-        if: ${{ !cancelled() && env.HAS_MINI_KEY == 'true' }}
+        if: env.HAS_MINI_KEY == 'true'
         env:
           WECHAT_UPLOAD_PRIVATE_KEY: ${{ secrets.WECHAT_UPLOAD_PRIVATE_KEY }}
         run: |
