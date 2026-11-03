@@ -1,0 +1,67 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-11-03T05:54:53.577178Z"
+  },
+  "title": "Jarvis Family · 快递原型",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 850,
+      "title": "Web · 快递列表",
+      "expand": "fill"
+    },
+    "WebFlow.dc.html": {
+      "x": 0,
+      "y": 1010,
+      "w": 1280,
+      "h": 850,
+      "title": "Web · 登录、详情与录入"
+    },
+    "Mini.dc.html": {
+      "x": 1380,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "小程序 · 快递列表"
+    },
+    "MiniFlow.dc.html": {
+      "x": 1380,
+      "y": 1010,
+      "w": 390,
+      "h": 844,
+      "title": "小程序 · 详情与录入"
+    },
+    "Access.dc.html": {
+      "x": 1870,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "小程序 · 登录与白名单拦截"
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "WebFlow.dc.html",
+    "Mini.dc.html",
+    "MiniFlow.dc.html",
+    "Access.dc.html"
+  ],
+  "notes": {},
+  "designSystems": [
+    {
+      "title": "Jarvis Family",
+      "namespace": "family-system",
+      "artifact": "designs/family-system",
+      "version": null,
+      "copiedAt": "2026-11-03T05:54:53.577178Z"
+    }
+  ]
+}

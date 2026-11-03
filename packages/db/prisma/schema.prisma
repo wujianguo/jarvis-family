@@ -1,0 +1,112 @@
+// Design draft. Reconcile Better Auth base models with its CLI for the pinned version.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  whitelist     Whitelist?
+  createdPickups ExpressPickup[] @relation("PickupCreatedBy")
+  donePickups    ExpressPickup[] @relation("PickupDoneBy")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@index([identifier])
+}
+
+model Whitelist {
+  id              String   @id @default(cuid())
+  userId          String?  @unique
+  email           String?  @unique
+  wechatAppId     String?
+  wechatOpenId    String?
+  wechatUnionId   String?
+  displayName     String
+  role            FamilyRole @default(MEMBER)
+  enabled         Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // Application validation requires an email or an appid+openid pair.
+  @@unique([wechatAppId, wechatOpenId])
+  @@index([wechatUnionId])
+}
+
+enum FamilyRole {
+  ADMIN
+  MEMBER
+}
+
+model ExpressPickup {
+  id            String       @id @default(cuid())
+  rawInfo       String?      @db.Text
+  address       String       @db.VarChar(200)
+  pickupCode    String       @db.VarChar(80)
+  recipientName String?      @db.VarChar(80)
+  status        PickupStatus @default(PENDING)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  doneAt        DateTime?
+  createdById   String
+  doneById      String?
+  createdBy     User         @relation("PickupCreatedBy", fields: [createdById], references: [id])
+  doneBy        User?        @relation("PickupDoneBy", fields: [doneById], references: [id])
+  @@index([status, createdAt, id])
+  @@index([status, pickupCode, updatedAt])
+}
+
+enum PickupStatus {
+  PENDING
+  DONE
+}

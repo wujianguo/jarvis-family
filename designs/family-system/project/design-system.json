@@ -1,0 +1,25 @@
+{
+  "v": 3,
+  "layout": "files",
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-11-03T05:54:24.052695Z"
+  },
+  "title": "Jarvis Family",
+  "namespace": "JarvisFamily",
+  "libraries": [],
+  "sections": {},
+  "groups": [],
+  "assetGroups": {},
+  "blobs": {},
+  "docs": {
+    "readme": "project/README.md",
+    "sections": []
+  },
+  "lastChange": {
+    "by": "Codex",
+    "at": "2026-11-03T05:54:24.052695Z",
+    "via": "Codex",
+    "note": "Initial family express design system"
+  }
+}
