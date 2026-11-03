@@ -35,7 +35,12 @@ RestartSec=3
 WantedBy=multi-user.target
 UNIT
 sudo tee /etc/nginx/snippets/woshi.conf >/dev/null <<'CONF'
-location = /family { return 308 /family/; }
+location = /family {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+}
 location ^~ /family/api/ {
     proxy_pass http://127.0.0.1:3001/api/;
     proxy_set_header Host $host;
