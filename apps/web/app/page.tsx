@@ -6,7 +6,17 @@ import { Auth } from "@/components/auth/auth"
 import { AuthProvider } from "@/components/auth/auth-provider"
 import { Button } from "@workspace/ui/components/button"
 import { Badge } from "@workspace/ui/components/badge"
-import { Card } from "@workspace/ui/components/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@workspace/ui/components/card"
+import { Alert, AlertDescription } from "@workspace/ui/components/alert"
+import { Field, FieldGroup, FieldLabel } from "@workspace/ui/components/field"
+import { Input } from "@workspace/ui/components/input"
+import { Textarea } from "@workspace/ui/components/textarea"
 import { Toaster } from "@workspace/ui/components/sonner"
 import { createAuthClient } from "better-auth/react"
 import { useTheme } from "next-themes"
@@ -20,7 +30,6 @@ import {
   Moon,
   Sun,
 } from "lucide-react"
-import "./wo.css"
 const client = createAuthClient({
   baseURL:
     typeof window === "undefined"
@@ -39,7 +48,7 @@ function ThemeToggle() {
     <Button
       type="button"
       variant="outline"
-      className="theme-toggle"
+      size="icon"
       aria-label={
         mounted && resolvedTheme === "dark"
           ? "切换到浅色模式"
@@ -48,14 +57,7 @@ function ThemeToggle() {
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
       disabled={!mounted}
     >
-      {mounted && resolvedTheme === "dark" ? (
-        <Sun size={16} />
-      ) : (
-        <Moon size={16} />
-      )}
-      <span>
-        {mounted && resolvedTheme === "dark" ? "浅色模式" : "深色模式"}
-      </span>
+      {mounted && resolvedTheme === "dark" ? <Sun /> : <Moon />}
     </Button>
   )
 }
@@ -163,79 +165,84 @@ function Home() {
     }
   }
   if (session.isPending)
-    return <main className="center">正在检查登录状态…</main>
+    return (
+      <main className="flex min-h-screen items-center justify-center">
+        正在检查登录状态…
+      </main>
+    )
   if (!session.data?.user)
     return (
-      <main className="login">
-        <div className="login-theme">
+      <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-6">
+        <div className="absolute top-6 right-6">
           <ThemeToggle />
         </div>
-        <div className="login-stack">
-          <div className="login-brand">
-            <span className="mark">窝</span>
-            <h1>窝事</h1>
-          </div>
-          <p>家里的快递，一眼就知道。</p>
+        <div className="flex w-full max-w-sm flex-col items-center gap-4">
+          <h1 className="text-2xl font-semibold">窝事</h1>
+          <p className="text-sm text-muted-foreground">
+            家里的快递，一眼就知道。
+          </p>
           <Auth view="signIn" />
-          <small>仅受邀家庭成员可登录</small>
+          <small className="text-muted-foreground">仅受邀家庭成员可登录</small>
         </div>
       </main>
     )
   return (
-    <div className="shell">
-      <aside>
-        <div className="brand">
-          <span className="mark">窝</span>
+    <div className="min-h-screen bg-background text-foreground md:flex">
+      <aside className="flex flex-col gap-6 border-b bg-card p-4 md:min-h-screen md:w-64 md:shrink-0 md:border-r md:border-b-0 md:p-6">
+        <div className="flex items-center gap-3">
           <div>
             <b>窝事</b>
-            <small>家庭快递管家</small>
+            <small className="block text-muted-foreground">家庭快递管家</small>
           </div>
         </div>
-        <nav>
+        <nav className="flex flex-wrap gap-1 md:flex-col">
           <Button
-            variant="ghost"
-            className={tab === "pickups" ? "active" : ""}
+            variant={tab === "pickups" ? "secondary" : "ghost"}
+            className="justify-start"
             onClick={() => setTab("pickups")}
           >
-            <Package size={18} />
+            <Package data-icon="inline-start" />
             快递
           </Button>
           {role === "ADMIN" && (
             <>
               <Button
-                variant="ghost"
-                className={tab === "sms" ? "active" : ""}
+                variant={tab === "sms" ? "secondary" : "ghost"}
+                className="justify-start"
                 onClick={() => setTab("sms")}
               >
-                <MessageSquare size={18} />
+                <MessageSquare data-icon="inline-start" />
                 SMS 接入
               </Button>
               <Button
-                variant="ghost"
-                className={tab === "members" ? "active" : ""}
+                variant={tab === "members" ? "secondary" : "ghost"}
+                className="justify-start"
                 onClick={() => setTab("members")}
               >
-                <Users size={18} />
+                <Users data-icon="inline-start" />
                 家庭成员
               </Button>
             </>
           )}
         </nav>
-        <div className="aside-foot">
+        <div className="mt-auto flex flex-wrap items-center gap-3 border-t pt-4 md:flex-col md:items-start">
           <ThemeToggle />
-          <small>{session.data.user.email}</small>
-          <button
+          <small className="break-all text-muted-foreground">
+            {session.data.user.email}
+          </small>
+          <Button
+            variant="ghost"
             onClick={() => void client.signOut().then(() => session.refetch())}
           >
-            <LogOut size={16} />
+            <LogOut data-icon="inline-start" />
             退出登录
-          </button>
+          </Button>
         </div>
       </aside>
-      <main className="content">
-        <header>
+      <main className="mx-auto w-full max-w-7xl p-4 md:p-8">
+        <header className="mb-8 flex items-center justify-between gap-4">
           <div>
-            <small>
+            <small className="text-muted-foreground">
               窝事 /{" "}
               {tab === "pickups"
                 ? "快递"
@@ -243,7 +250,7 @@ function Home() {
                   ? "SMS 接入"
                   : "家庭成员"}
             </small>
-            <h1>
+            <h1 className="text-3xl font-semibold tracking-tight">
               {tab === "pickups"
                 ? "家里的快递"
                 : tab === "sms"
@@ -255,31 +262,36 @@ function Home() {
             {role === "ADMIN" ? "管理员" : "家庭成员"}
           </Badge>
         </header>
-        {error && <div className="error">{error}</div>}
+        {error && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
         {tab === "pickups" && (
           <>
-            <div className="toolbar">
-              <div className="segment">
-                <button
-                  className={status === "PENDING" ? "chosen" : ""}
+            <div className="mb-6 flex flex-wrap items-center gap-3">
+              <div className="flex gap-1 rounded-lg bg-muted p-1">
+                <Button
+                  variant={status === "PENDING" ? "secondary" : "ghost"}
                   onClick={() => setStatus("PENDING")}
                 >
                   待取
-                </button>
-                <button
-                  className={status === "DONE" ? "chosen" : ""}
+                </Button>
+                <Button
+                  variant={status === "DONE" ? "secondary" : "ghost"}
                   onClick={() => setStatus("DONE")}
                 >
                   已取
-                </button>
+                </Button>
               </div>
-              <input
+              <Input
+                className="min-w-48 flex-1 md:max-w-xs"
                 placeholder="搜索地点或取件码"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
-              <button
-                className="primary"
+              <Button
+                variant="default"
                 onClick={() => {
                   setSelected(null)
                   setForm({
@@ -291,144 +303,176 @@ function Home() {
                   setEditing(true)
                 }}
               >
-                <Plus size={16} />
+                <Plus data-icon="inline-start" />
                 录入快递
-              </button>
+              </Button>
             </div>
-            <div className="columns">
-              <div className="list">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(300px,2fr)]">
+              <div className="flex min-w-0 flex-col gap-3">
                 {pickups.length ? (
                   pickups.map((p) => (
                     <Card
-                      className="pickup-card cursor-pointer transition-colors hover:border-primary"
+                      className="cursor-pointer"
                       key={p.id}
                       onClick={() => setSelected(p)}
+                      onKeyDown={(event) => {
+                        if (
+                          event.target === event.currentTarget &&
+                          (event.key === "Enter" || event.key === " ")
+                        ) {
+                          event.preventDefault()
+                          setSelected(p)
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
                     >
-                      <div className="meta">
-                        <Badge variant="secondary">
-                          {p.source === "SMS" ? "短信自动" : "手工录入"}
-                        </Badge>
-                        <small>
-                          {new Date(p.createdAt).toLocaleString("zh-CN")}
-                        </small>
-                      </div>
-                      <h2>{p.address}</h2>
-                      <div className="card-foot">
-                        <strong>{p.pickupCode}</strong>
-                        {p.status === "PENDING" && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              void action(() =>
-                                api(`/express/pickups/${p.id}/done`, "POST")
-                              )
-                            }}
-                          >
-                            <Check size={14} />
-                            标记已取
-                          </button>
-                        )}
-                      </div>
+                      <CardHeader>
+                        <div className="flex items-center justify-between gap-3">
+                          <Badge variant="secondary">
+                            {p.source === "SMS" ? "短信自动" : "手工录入"}
+                          </Badge>
+                          <small>
+                            {new Date(p.createdAt).toLocaleString("zh-CN")}
+                          </small>
+                        </div>
+                        <CardTitle>{p.address}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center justify-between gap-3">
+                          <strong>{p.pickupCode}</strong>
+                          {p.status === "PENDING" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                void action(() =>
+                                  api(`/express/pickups/${p.id}/done`, "POST")
+                                )
+                              }}
+                            >
+                              <Check data-icon="inline-start" />
+                              标记已取
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
                     </Card>
                   ))
                 ) : (
-                  <div className="empty">这里还没有快递</div>
+                  <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+                    这里还没有快递
+                  </div>
                 )}
               </div>
-              <div className="detail">
-                {selected ? (
-                  <>
-                    <small>快递详情</small>
-                    <h2>{selected.address}</h2>
-                    <div className="big-code">{selected.pickupCode}</div>
-                    <dl>
-                      <dt>状态</dt>
-                      <dd>{selected.status === "PENDING" ? "待取" : "已取"}</dd>
-                      <dt>来源</dt>
-                      <dd>
-                        {selected.source === "SMS" ? "短信自动" : "手工录入"}
-                      </dd>
-                      <dt>收件人</dt>
-                      <dd>{selected.recipientName || "—"}</dd>
-                      <dt>录入时间</dt>
-                      <dd>
-                        {new Date(selected.createdAt).toLocaleString("zh-CN")}
-                      </dd>
-                      <dt>通知原文</dt>
-                      <dd>{selected.rawInfo || "—"}</dd>
-                    </dl>
-                    <button
-                      onClick={() => {
-                        setForm({
-                          address: selected.address,
-                          pickupCode: selected.pickupCode,
-                          recipientName: selected.recipientName || "",
-                          rawInfo: selected.rawInfo || "",
-                        })
-                        setEditing(true)
-                      }}
-                    >
-                      编辑信息
-                    </button>
-                  </>
-                ) : (
-                  <div className="empty">选择一条快递查看详情</div>
-                )}
-              </div>
+              <Card className="h-fit">
+                <CardContent className="flex flex-col gap-4">
+                  {selected ? (
+                    <>
+                      <small>快递详情</small>
+                      <h2>{selected.address}</h2>
+                      <div className="my-5 rounded-lg bg-muted p-4 text-2xl font-semibold tracking-widest">
+                        {selected.pickupCode}
+                      </div>
+                      <dl className="grid grid-cols-[7rem_1fr] gap-3 text-sm [&_dd]:break-all [&_dt]:text-muted-foreground">
+                        <dt>状态</dt>
+                        <dd>
+                          {selected.status === "PENDING" ? "待取" : "已取"}
+                        </dd>
+                        <dt>来源</dt>
+                        <dd>
+                          {selected.source === "SMS" ? "短信自动" : "手工录入"}
+                        </dd>
+                        <dt>收件人</dt>
+                        <dd>{selected.recipientName || "—"}</dd>
+                        <dt>录入时间</dt>
+                        <dd>
+                          {new Date(selected.createdAt).toLocaleString("zh-CN")}
+                        </dd>
+                        <dt>通知原文</dt>
+                        <dd>{selected.rawInfo || "—"}</dd>
+                      </dl>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setForm({
+                            address: selected.address,
+                            pickupCode: selected.pickupCode,
+                            recipientName: selected.recipientName || "",
+                            rawInfo: selected.rawInfo || "",
+                          })
+                          setEditing(true)
+                        }}
+                      >
+                        编辑信息
+                      </Button>
+                    </>
+                  ) : (
+                    <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+                      选择一条快递查看详情
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
             {role === "ADMIN" && (
-              <div className="by-code">
-                <strong>按取件码完成</strong>
-                <input
-                  placeholder="输入取件码"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                />
-                <button
-                  onClick={() =>
-                    void action(async () => {
-                      const found = (
-                        await api<{
-                          items: (Pickup & { updatedAt: string })[]
-                        }>(
-                          `/express/pickups?status=PENDING&q=${encodeURIComponent(code)}&limit=100`
+              <Card className="mt-6">
+                <CardContent className="flex flex-wrap items-center gap-3">
+                  <strong>按取件码完成</strong>
+                  <Input
+                    className="w-full sm:ml-auto sm:max-w-xs"
+                    placeholder="输入取件码"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                  />
+                  <Button
+                    onClick={() =>
+                      void action(async () => {
+                        const found = (
+                          await api<{
+                            items: (Pickup & { updatedAt: string })[]
+                          }>(
+                            `/express/pickups?status=PENDING&q=${encodeURIComponent(code)}&limit=100`
+                          )
+                        ).items
+                          .filter((p) => p.pickupCode === code)
+                          .sort(
+                            (a, b) =>
+                              b.updatedAt.localeCompare(a.updatedAt) ||
+                              b.id.localeCompare(a.id)
+                          )
+                        if (!found.length) throw new Error("没有匹配的待取快递")
+                        if (
+                          !window.confirm(
+                            `将完成：${found[0]!.address} · ${found[0]!.pickupCode}${found.length > 1 ? `（同码共 ${found.length} 条，选最近更新）` : ""}，确认吗？`
+                          )
                         )
-                      ).items
-                        .filter((p) => p.pickupCode === code)
-                        .sort(
-                          (a, b) =>
-                            b.updatedAt.localeCompare(a.updatedAt) ||
-                            b.id.localeCompare(a.id)
-                        )
-                      if (!found.length) throw new Error("没有匹配的待取快递")
-                      if (
-                        !window.confirm(
-                          `将完成：${found[0]!.address} · ${found[0]!.pickupCode}${found.length > 1 ? `（同码共 ${found.length} 条，选最近更新）` : ""}，确认吗？`
-                        )
-                      )
-                        return
-                      const result = await api<
-                        Pickup & { matchedPendingCount: number }
-                      >("/express/pickups/done-by-code", "POST", {
-                        pickupCode: code,
+                          return
+                        const result = await api<
+                          Pickup & { matchedPendingCount: number }
+                        >("/express/pickups/done-by-code", "POST", {
+                          pickupCode: code,
+                        })
+                        setSelected(result)
+                        setCode("")
                       })
-                      setSelected(result)
-                      setCode("")
-                    })
-                  }
-                >
-                  完成
-                </button>
-              </div>
+                    }
+                  >
+                    完成
+                  </Button>
+                </CardContent>
+              </Card>
             )}
           </>
         )}
         {tab === "sms" && (
-          <div className="columns">
-            <div className="list">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(300px,2fr)]">
+            <div className="flex min-w-0 flex-col gap-3">
               {sms.map((s) => (
-                <button
-                  className="sms-card"
+                <Button
+                  variant="outline"
+                  className="h-auto flex-col items-start gap-1 p-4 text-left"
                   key={s.id}
                   onClick={() =>
                     void action(async () =>
@@ -443,237 +487,323 @@ function Home() {
                   <small>
                     {new Date(s.receivedAt).toLocaleString("zh-CN")}
                   </small>
-                </button>
+                </Button>
               ))}
-              {!sms.length && <div className="empty">还没有短信记录</div>}
-            </div>
-            <div className="detail">
-              {smsSelected ? (
-                <>
-                  <h2>短信详情</h2>
-                  <p>{smsSelected.content}</p>
-                  <p>
-                    状态：{smsSelected.status} {smsSelected.errorCode || ""}
-                  </p>
-                  {smsSelected.status === "REVIEW" && (
-                    <>
-                      <button
-                        onClick={() =>
-                          void action(() =>
-                            api(`/sms/ingests/${smsSelected.id}/retry`, "POST")
-                          )
-                        }
-                      >
-                        重新处理
-                      </button>
-                      <input id="link-id" placeholder="已有快递 ID" />
-                      <button
-                        onClick={() =>
-                          void action(() =>
-                            api(`/sms/ingests/${smsSelected.id}/link`, "POST", {
-                              pickupId: (
-                                document.getElementById(
-                                  "link-id"
-                                ) as HTMLInputElement
-                              ).value,
-                            })
-                          )
-                        }
-                      >
-                        确认关联
-                      </button>
-                    </>
-                  )}
-                </>
-              ) : (
-                <div className="empty">选择一条短信查看</div>
+              {!sms.length && (
+                <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+                  还没有短信记录
+                </div>
               )}
             </div>
+            <Card className="h-fit">
+              <CardContent className="flex flex-col gap-4">
+                {smsSelected ? (
+                  <>
+                    <h2>短信详情</h2>
+                    <p>{smsSelected.content}</p>
+                    <p>
+                      状态：{smsSelected.status} {smsSelected.errorCode || ""}
+                    </p>
+                    {smsSelected.status === "REVIEW" && (
+                      <>
+                        <Button
+                          onClick={() =>
+                            void action(() =>
+                              api(
+                                `/sms/ingests/${smsSelected.id}/retry`,
+                                "POST"
+                              )
+                            )
+                          }
+                        >
+                          重新处理
+                        </Button>
+                        <Input id="link-id" placeholder="已有快递 ID" />
+                        <Button
+                          onClick={() =>
+                            void action(() =>
+                              api(
+                                `/sms/ingests/${smsSelected.id}/link`,
+                                "POST",
+                                {
+                                  pickupId: (
+                                    document.getElementById(
+                                      "link-id"
+                                    ) as HTMLInputElement
+                                  ).value,
+                                }
+                              )
+                            )
+                          }
+                        >
+                          确认关联
+                        </Button>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+                    选择一条短信查看
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         )}
         {tab === "members" && (
           <>
-            <div className="members">
-              {members.map((m) => (
-                <div className="member" key={m.id}>
-                  <div>
-                    <b>{m.displayName}</b>
-                    <p>{m.email || m.wechatOpenId || m.wechatUnionId}</p>
-                  </div>
-                  <span>{m.role === "ADMIN" ? "管理员" : "成员"}</span>
-                  {m.email && (
-                    <button
+            <Card>
+              <CardHeader>
+                <CardTitle>白名单</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {members.map((m) => (
+                  <div
+                    className="flex flex-wrap items-center gap-3 border-b px-5 py-4 last:border-b-0"
+                    key={m.id}
+                  >
+                    <div>
+                      <b>{m.displayName}</b>
+                      <p>{m.email || m.wechatOpenId || m.wechatUnionId}</p>
+                    </div>
+                    <span>{m.role === "ADMIN" ? "管理员" : "成员"}</span>
+                    {m.email && (
+                      <Button
+                        onClick={() => {
+                          const password = window.prompt(
+                            `为 ${m.displayName} 设置初始密码（至少 8 位）`
+                          )
+                          if (password)
+                            void action(() =>
+                              api(`/whitelist/${m.id}/set-password`, "POST", {
+                                password,
+                              })
+                            )
+                        }}
+                      >
+                        设密码
+                      </Button>
+                    )}
+                    <Button
                       onClick={() => {
-                        const password = window.prompt(
-                          `为 ${m.displayName} 设置初始密码（至少 8 位）`
+                        const openid = window.prompt(
+                          `绑定 ${m.displayName} 的微信 openid`,
+                          m.wechatOpenId || ""
                         )
-                        if (password)
+                        if (openid)
                           void action(() =>
-                            api(`/whitelist/${m.id}/set-password`, "POST", {
-                              password,
+                            api(`/whitelist/${m.id}`, "PATCH", {
+                              wechatAppId: "wxce94463a6a805e99",
+                              wechatOpenId: openid,
                             })
                           )
                       }}
                     >
-                      设密码
-                    </button>
-                  )}
-                  <button
-                    onClick={() => {
-                      const openid = window.prompt(
-                        `绑定 ${m.displayName} 的微信 openid`,
-                        m.wechatOpenId || ""
-                      )
-                      if (openid)
+                      绑定微信
+                    </Button>
+                    <Button
+                      onClick={() =>
                         void action(() =>
                           api(`/whitelist/${m.id}`, "PATCH", {
-                            wechatAppId: "wxce94463a6a805e99",
-                            wechatOpenId: openid,
+                            enabled: !m.enabled,
                           })
                         )
-                    }}
-                  >
-                    绑定微信
-                  </button>
-                  <button
-                    onClick={() =>
-                      void action(() =>
-                        api(`/whitelist/${m.id}`, "PATCH", {
-                          enabled: !m.enabled,
-                        })
-                      )
-                    }
-                  >
-                    {m.enabled ? "停用" : "启用"}
-                  </button>
-                </div>
-              ))}
-            </div>
-            <form
-              className="member-form"
-              onSubmit={(e) => {
-                e.preventDefault()
-                void action(async () => {
-                  await api("/whitelist", "POST", {
-                    displayName: member.displayName,
-                    email: member.email || undefined,
-                    wechatAppId: member.wechatOpenId
-                      ? "wxce94463a6a805e99"
-                      : undefined,
-                    wechatOpenId: member.wechatOpenId || undefined,
-                    wechatUnionId: member.wechatUnionId || undefined,
-                  })
-                  setMember({
-                    displayName: "",
-                    email: "",
-                    wechatOpenId: "",
-                    wechatUnionId: "",
-                  })
-                })
-              }}
-            >
-              <h2>添加家庭成员</h2>
-              <p>填邮箱、openid 或 unionid 中的至少一项。</p>
-              <input
-                required
-                placeholder="称呼"
-                value={member.displayName}
-                onChange={(e) =>
-                  setMember({ ...member, displayName: e.target.value })
-                }
-              />
-              <input
-                placeholder="邮箱"
-                value={member.email}
-                onChange={(e) =>
-                  setMember({ ...member, email: e.target.value })
-                }
-              />
-              <input
-                placeholder="微信 openid"
-                value={member.wechatOpenId}
-                onChange={(e) =>
-                  setMember({ ...member, wechatOpenId: e.target.value })
-                }
-              />
-              <input
-                placeholder="微信 unionid"
-                value={member.wechatUnionId}
-                onChange={(e) =>
-                  setMember({ ...member, wechatUnionId: e.target.value })
-                }
-              />
-              <button className="primary">添加</button>
-            </form>
+                      }
+                    >
+                      {m.enabled ? "停用" : "启用"}
+                    </Button>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+            <Card className="mt-6 max-w-xl">
+              <CardHeader>
+                <CardTitle>添加家庭成员</CardTitle>
+                <CardDescription>
+                  填邮箱、openid 或 unionid 中的至少一项。
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form
+                  className="flex flex-col gap-4"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    void action(async () => {
+                      await api("/whitelist", "POST", {
+                        displayName: member.displayName,
+                        email: member.email || undefined,
+                        wechatAppId: member.wechatOpenId
+                          ? "wxce94463a6a805e99"
+                          : undefined,
+                        wechatOpenId: member.wechatOpenId || undefined,
+                        wechatUnionId: member.wechatUnionId || undefined,
+                      })
+                      setMember({
+                        displayName: "",
+                        email: "",
+                        wechatOpenId: "",
+                        wechatUnionId: "",
+                      })
+                    })
+                  }}
+                >
+                  <FieldGroup>
+                    <Field>
+                      <FieldLabel htmlFor="member-name">称呼</FieldLabel>
+                      <Input
+                        id="member-name"
+                        required
+                        placeholder="称呼"
+                        value={member.displayName}
+                        onChange={(e) =>
+                          setMember({ ...member, displayName: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="member-email">邮箱</FieldLabel>
+                      <Input
+                        id="member-email"
+                        placeholder="邮箱"
+                        value={member.email}
+                        onChange={(e) =>
+                          setMember({ ...member, email: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="member-openid">
+                        微信 openid
+                      </FieldLabel>
+                      <Input
+                        id="member-openid"
+                        placeholder="微信 openid"
+                        value={member.wechatOpenId}
+                        onChange={(e) =>
+                          setMember({ ...member, wechatOpenId: e.target.value })
+                        }
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel htmlFor="member-unionid">
+                        微信 unionid
+                      </FieldLabel>
+                      <Input
+                        id="member-unionid"
+                        placeholder="微信 unionid"
+                        value={member.wechatUnionId}
+                        onChange={(e) =>
+                          setMember({
+                            ...member,
+                            wechatUnionId: e.target.value,
+                          })
+                        }
+                      />
+                    </Field>
+                  </FieldGroup>
+                  <Button variant="default">添加</Button>
+                </form>
+              </CardContent>
+            </Card>
           </>
         )}
       </main>
       {editing && (
-        <div className="overlay" onClick={() => setEditing(false)}>
-          <form
-            className="modal"
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setEditing(false)}
+        >
+          <Card
+            className="w-full max-w-lg"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pickup-form-title"
             onClick={(e) => e.stopPropagation()}
-            onSubmit={(e) => {
-              e.preventDefault()
-              void action(async () => {
-                await api(
-                  selected
-                    ? `/express/pickups/${selected.id}`
-                    : "/express/pickups",
-                  selected ? "PATCH" : "POST",
-                  form
-                )
-                setEditing(false)
-                setSelected(null)
-              })
-            }}
           >
-            <h2>{selected ? "编辑快递" : "录入快递"}</h2>
-            <label>
-              取件地点
-              <input
-                required
-                maxLength={200}
-                value={form.address}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
-              />
-            </label>
-            <label>
-              取件码
-              <input
-                required
-                maxLength={80}
-                value={form.pickupCode}
-                onChange={(e) =>
-                  setForm({ ...form, pickupCode: e.target.value })
-                }
-              />
-            </label>
-            <label>
-              收件人
-              <input
-                maxLength={80}
-                value={form.recipientName}
-                onChange={(e) =>
-                  setForm({ ...form, recipientName: e.target.value })
-                }
-              />
-            </label>
-            <label>
-              短信原文
-              <textarea
-                maxLength={4000}
-                value={form.rawInfo}
-                onChange={(e) => setForm({ ...form, rawInfo: e.target.value })}
-              />
-            </label>
-            <div className="actions">
-              <button type="button" onClick={() => setEditing(false)}>
-                取消
-              </button>
-              <button className="primary">保存</button>
-            </div>
-          </form>
+            <CardHeader>
+              <CardTitle id="pickup-form-title">
+                {selected ? "编辑快递" : "录入快递"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form
+                className="flex flex-col gap-4"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  void action(async () => {
+                    await api(
+                      selected
+                        ? `/express/pickups/${selected.id}`
+                        : "/express/pickups",
+                      selected ? "PATCH" : "POST",
+                      form
+                    )
+                    setEditing(false)
+                    setSelected(null)
+                  })
+                }}
+              >
+                <FieldGroup>
+                  <Field>
+                    <FieldLabel htmlFor="pickup-address">取件地点</FieldLabel>
+                    <Input
+                      id="pickup-address"
+                      required
+                      maxLength={200}
+                      value={form.address}
+                      onChange={(e) =>
+                        setForm({ ...form, address: e.target.value })
+                      }
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="pickup-code">取件码</FieldLabel>
+                    <Input
+                      id="pickup-code"
+                      required
+                      maxLength={80}
+                      value={form.pickupCode}
+                      onChange={(e) =>
+                        setForm({ ...form, pickupCode: e.target.value })
+                      }
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="pickup-recipient">收件人</FieldLabel>
+                    <Input
+                      id="pickup-recipient"
+                      maxLength={80}
+                      value={form.recipientName}
+                      onChange={(e) =>
+                        setForm({ ...form, recipientName: e.target.value })
+                      }
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor="pickup-info">短信原文</FieldLabel>
+                    <Textarea
+                      id="pickup-info"
+                      maxLength={4000}
+                      value={form.rawInfo}
+                      onChange={(e) =>
+                        setForm({ ...form, rawInfo: e.target.value })
+                      }
+                    />
+                  </Field>
+                </FieldGroup>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setEditing(false)}
+                  >
+                    取消
+                  </Button>
+                  <Button variant="default">保存</Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

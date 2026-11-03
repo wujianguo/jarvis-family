@@ -8,14 +8,14 @@
 
 ## 总体架构
 
-| 位置 | 责任 | 第一版 |
-| --- | --- | --- |
-| `apps/web` | Next.js Web 管理端；shadcn/ui blocks 的侧栏、列表、详情、表单结构 | 现有模板保留，按原型逐步实现 |
-| `apps/mini` | Taro + React 微信小程序；轻量取件流程 | 规划目录，MVP 建立 |
-| `apps/api` | Node 服务，统一承载 Better Auth、微信登录桥接、快递 API 与 SMS ingest/处理 | 规划目录，MVP 建立 |
-| `packages/db` | Prisma schema、migration、Prisma Client | 本轮提交 schema 草案 |
-| `packages/contracts` | Zod 请求/响应契约及状态常量，供三端复用 | MVP 建立 |
-| `packages/ui` | 现有 Web shadcn/ui 组件 | 现有目录 |
+| 位置                 | 责任                                                                       | 第一版                       |
+| -------------------- | -------------------------------------------------------------------------- | ---------------------------- |
+| `apps/web`           | Next.js Web 管理端；shadcn/ui blocks 的侧栏、列表、详情、表单结构          | 现有模板保留，按原型逐步实现 |
+| 微信小程序           | [独立仓库](https://github.com/wujianguo/jarvis-family-mini)                | 独立维护                     |
+| `apps/api`           | Node 服务，统一承载 Better Auth、微信登录桥接、快递 API 与 SMS ingest/处理 | 规划目录，MVP 建立           |
+| `packages/db`        | Prisma schema、migration、Prisma Client                                    | 本轮提交 schema 草案         |
+| `packages/contracts` | Zod 请求/响应契约及状态常量，供三端复用                                    | MVP 建立                     |
+| `packages/ui`        | 现有 Web shadcn/ui 组件                                                    | 现有目录                     |
 
 API 独立于 Next.js，可服务 Web、小程序与 iOS 捷径。开发与部署均使用 PostgreSQL；Prisma migration 管理结构变更。交互业务请求在 API 完成会话鉴权和白名单检查；SMS ingest 使用独立的设备密钥，不借用家庭成员会话。
 
@@ -71,14 +71,14 @@ location ^~ /family/ {
 
 请求与响应使用 JSON、ISO 8601 UTC 时间；展示时按设备时区格式化。状态值 `PENDING`、`DONE`。成功列表统一 `{ items, nextCursor }`，单条返回记录对象；错误统一 `{ error: { code, message } }`。默认列表仅 `PENDING`，按 `createdAt DESC, id DESC` 游标分页，默认 20 条，最多 100 条。
 
-| 方法/路径 | 用途 | 关键请求/语义 |
-| --- | --- | --- |
-| `POST /` | 手工录入 | `rawInfo?`, `address`, `pickupCode`, `recipientName?`; `201` |
-| `GET /?status=PENDING\|DONE&cursor=&limit=` | 列表 | 默认待取；可选 `q` 搜索地点/取件码 |
-| `GET /:id` | 详情 | 不存在 `404` |
-| `PATCH /:id` | 修改 | 可修改原文、地点、码、收件人；空 patch `400` |
-| `POST /:id/done` | 按 ID 完成 | 幂等，返回更新后记录 |
-| `POST /done-by-code` | 按码完成 | `{ pickupCode }`；仅匹配待取；无匹配 `404`；同码按最新更新项选取，响应带 `matchedPendingCount` 便于 UI 提醒 |
+| 方法/路径                                   | 用途       | 关键请求/语义                                                                                               |
+| ------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------- |
+| `POST /`                                    | 手工录入   | `rawInfo?`, `address`, `pickupCode`, `recipientName?`; `201`                                                |
+| `GET /?status=PENDING\|DONE&cursor=&limit=` | 列表       | 默认待取；可选 `q` 搜索地点/取件码                                                                          |
+| `GET /:id`                                  | 详情       | 不存在 `404`                                                                                                |
+| `PATCH /:id`                                | 修改       | 可修改原文、地点、码、收件人；空 patch `400`                                                                |
+| `POST /:id/done`                            | 按 ID 完成 | 幂等，返回更新后记录                                                                                        |
+| `POST /done-by-code`                        | 按码完成   | `{ pickupCode }`；仅匹配待取；无匹配 `404`；同码按最新更新项选取，响应带 `matchedPendingCount` 便于 UI 提醒 |
 
 公共错误：未登录 `401`；未入白名单或被停用 `403 WHITELIST_REQUIRED`；校验失败 `400 VALIDATION_ERROR`；并发状态冲突 `409`。创建/修改约束：`address` 1–200 字、`pickupCode` 1–80 字、`rawInfo` 最多 4000 字；去首尾空格，不自动解析原文。创建可携带 `Idempotency-Key` 防重复点击；返回记录包含 `source`，详情可含 SMS 接收时间和处理记录 ID，原文仅对白名单成员显示。旧能力映射为创建、按状态列表、详情、更新、按 ID 完成、按码完成；旧 `taskId` 不进入新业务模型。
 
@@ -88,13 +88,13 @@ location ^~ /family/ {
 
 部署环境变量示例：`SMS_AI_BASE_URL=https://token.libms.top/v1`、`SMS_AI_MODEL=deepseek-flash`、`SMS_AI_API_KEY`（由 vault / 部署密钥注入，不在方案记录真实值）。管理员在部署环境分别配置和轮换 `SMS_INGEST_TOKEN` 与 `SMS_AI_API_KEY`；iOS 捷径只持有 ingest token，不持有 AI key。
 
-| 方法/对外路径 | 用途 | 关键语义 |
-| --- | --- | --- |
-| `POST /family/api/sms/ingest` | iOS 捷径提交 | 内部路由 `POST /api/sms/ingest`；`Authorization: Bearer <SMS_INGEST_TOKEN>`；请求 `{ content, sender?, receivedAt, device, clientEventId? }`，`receivedAt` 为必填 ISO 8601；入库后 `202 { id, accepted: true, deduped: false }`，重复提交 `200 { id, accepted: true, deduped: true }` |
-| `GET /family/api/sms/ingests?status=&cursor=` | 管理端查看处理记录 | 仅管理员会话及白名单可用；显示来源、时间、状态、关联快递及失败原因，原文仅详情展示 |
-| `GET /family/api/sms/ingests/:id` | 管理端查看详情 | 仅管理员会话及白名单可用；包含原文、处理状态和关联快递 |
-| `POST /family/api/sms/ingests/:id/retry` | 管理端重试 | 仅 `REVIEW` 记录可重试；保留原 ID，不创建第二条短信或快递 |
-| `POST /family/api/sms/ingests/:id/link` | 管理端审核关联 | 请求 `{ pickupId }`；只对 `REVIEW` 记录生效，检查目标快递存在后关联并置 `LINKED_EXISTING`；若需补录，先调用手工创建接口再关联 |
+| 方法/对外路径                                 | 用途               | 关键语义                                                                                                                                                                                                                                                                              |
+| --------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /family/api/sms/ingest`                 | iOS 捷径提交       | 内部路由 `POST /api/sms/ingest`；`Authorization: Bearer <SMS_INGEST_TOKEN>`；请求 `{ content, sender?, receivedAt, device, clientEventId? }`，`receivedAt` 为必填 ISO 8601；入库后 `202 { id, accepted: true, deduped: false }`，重复提交 `200 { id, accepted: true, deduped: true }` |
+| `GET /family/api/sms/ingests?status=&cursor=` | 管理端查看处理记录 | 仅管理员会话及白名单可用；显示来源、时间、状态、关联快递及失败原因，原文仅详情展示                                                                                                                                                                                                    |
+| `GET /family/api/sms/ingests/:id`             | 管理端查看详情     | 仅管理员会话及白名单可用；包含原文、处理状态和关联快递                                                                                                                                                                                                                                |
+| `POST /family/api/sms/ingests/:id/retry`      | 管理端重试         | 仅 `REVIEW` 记录可重试；保留原 ID，不创建第二条短信或快递                                                                                                                                                                                                                             |
+| `POST /family/api/sms/ingests/:id/link`       | 管理端审核关联     | 请求 `{ pickupId }`；只对 `REVIEW` 记录生效，检查目标快递存在后关联并置 `LINKED_EXISTING`；若需补录，先调用手工创建接口再关联                                                                                                                                                         |
 
 `SMS_INGEST_TOKEN` 是与 Better Auth 密钥、用户 Session 分离的高熵随机密钥，部署时作为服务端环境变量配置，在捷径的 HTTPS 请求头中使用。服务端做恒定时间比较，拒绝无效密钥 `401`，鉴权前按 IP、鉴权后按设备限速；轮换时由管理员在部署环境替换密钥并同步更新捷径。日志、响应和原型均不展示密钥或完整短信。请求校验 `content` 非空且最多 4000 字、`device` 非空且最多 160 字、`sender` 最多 160 字、`clientEventId` 最多 128 字，并拒绝无效或明显未来的接收时间。捷径应为每条短信生成稳定 `clientEventId` 并在重试时复用；服务端以 `(device, clientEventId)` 唯一约束判重，另计算 `SHA-256(规范化设备|发件人|接收时间精确到秒|规范化正文)` 作为 `fingerprint`，PG 唯一约束处理并发重复。没有 `clientEventId` 也能按指纹判重；捷径必须传原短信 `receivedAt`，避免服务端当前时间导致重试失效。相同正文在不同接收时间是不同短信。唯一键命中且内容/指纹一致时返回既有记录，不重新分类或建单；同一个 `clientEventId` 对应不同内容时返回 `409 IDEMPOTENCY_CONFLICT`。
 

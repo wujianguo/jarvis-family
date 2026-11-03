@@ -1,6 +1,6 @@
 # 窝事部署
 
-主分支推送后，GitHub Actions 类型检查、构建 Web 与 API，并通过 SSH 将该提交部署到 ECS。小程序由独立仓库 `jarvis-family-mini` 管理。
+主分支推送后，GitHub Actions 类型检查、构建 Web 与 API，并通过 SSH 将该提交部署到 ECS。小程序由[独立仓库](https://github.com/wujianguo/jarvis-family-mini)管理。
 
 ## GitHub Actions secrets
 
