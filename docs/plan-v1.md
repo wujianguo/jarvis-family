@@ -59,7 +59,7 @@ location ^~ /family/ {
 
 **Web**：Better Auth 邮箱密码登录，关闭公开注册。MVP 启动时用一次性种子步骤写入 `lsjustin@yeah.net` 的 `Whitelist(enabled=true, role=ADMIN)`，并通过受控初始化流程设置该管理员的邮箱密码账户；完成后首次用邮箱密码登录 Web，即可在 Web 显式绑定微信。后续成员由管理员录入白名单并发邀请/设置初始凭据。使用 `@better-auth-ui/react` + shadcn 组件做表单与会话 UI。Better Auth 服务端用 Prisma adapter；登录时和每次业务请求都检查有效白名单，移除成员后下一次请求立即拒绝。Web 同站 Cookie 为 HttpOnly、Secure、SameSite=Lax；生产环境设置强随机 `BETTER_AUTH_SECRET`、精确 `trustedOrigins`、数据库级限速。
 
-**微信小程序「窝事」**：AppID 已确认为 `wxce94463a6a805e99`，服务端配置 `WECHAT_MINI_APPID=wxce94463a6a805e99`；原始 ID `gh_a696f88a7ea0` 仅作备案。AppSecret 尚未提供，上线前必须配置服务端 `WECHAT_MINI_SECRET`。未登录且无有效会话时，先用 `wx.login`/Taro 登录获取一次性 `code`，调用 `POST /api/auth/wechat-mini/identity`：API 用服务端 AppID/Secret 调 `jscode2session`，只返回该 code 对应的 `openid` 和有则返回的 `unionid`，不创建 User、Account、Session，不要求白名单，也不返回 `session_key`。接口限速，校验 code 一次性与失效错误，日志不打印 code 或身份值。小程序首页展示这些身份供复制给管理员；不能用客户端自行传入的身份值认证。已有有效会话且仍在白名单者直接进入正常快递列表。
+**微信小程序「窝事」**：AppID 已确认为 `wxce94463a6a805e99`，服务端配置 `WECHAT_MINI_APPID=wxce94463a6a805e99`；原始 ID `gh_a696f88a7ea0` 仅作备案。AppSecret 已取得并保存在部署侧密钥库（不入库、不写进方案正文）；上线时注入服务端环境变量 `WECHAT_MINI_SECRET`。未登录且无有效会话时，先用 `wx.login`/Taro 登录获取一次性 `code`，调用 `POST /api/auth/wechat-mini/identity`：API 用服务端 AppID/Secret 调 `jscode2session`，只返回该 code 对应的 `openid` 和有则返回的 `unionid`，不创建 User、Account、Session，不要求白名单，也不返回 `session_key`。接口限速，校验 code 一次性与失效错误，日志不打印 code 或身份值。小程序首页展示这些身份供复制给管理员；不能用客户端自行传入的身份值认证。已有有效会话且仍在白名单者直接进入正常快递列表。
 
 管理员按 `appid + openid` 或 `unionid` 加入白名单后，用户重新取得 `wx.login` code，经 `POST /api/auth/wechat-mini/exchange` 登录；API 用服务端密钥调用 `jscode2session`，以返回的身份匹配 `Whitelist(enabled=true)`，随后通过经审查的 Better Auth 自定义登录端点/插件创建或关联 User、Account 和 Session。不能使用开放注册端点。若没有白名单，返回 `403 WHITELIST_REQUIRED`，不创建可用会话，客户端继续展示身份页与加白名单指引。
 
@@ -127,5 +127,5 @@ location ^~ /family/ {
 
 ## 上线前待准备
 
-- 小程序 AppID 已确认，部署时配置 `WECHAT_MINI_APPID=wxce94463a6a805e99`；上线前仍须取得 AppSecret 并配置 `WECHAT_MINI_SECRET`。原始 ID `gh_a696f88a7ea0` 仅备案，不能用于 `jscode2session`。
+- 小程序 AppID 已确认：部署配置 `WECHAT_MINI_APPID=wxce94463a6a805e99`，并从密钥库注入 `WECHAT_MINI_SECRET`。原始 ID `gh_a696f88a7ea0` 仅备案，不能用于 `jscode2session`。
 - 核对现有 nginx `/family/` 路由，并在部署环境注入 Better Auth 与 SMS 的正式密钥。
