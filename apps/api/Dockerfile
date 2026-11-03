@@ -5,6 +5,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json apps/api/package.json
 COPY packages/db/package.json packages/db/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
+COPY packages/eslint-config/package.json packages/eslint-config/package.json
 RUN pnpm install --filter api... --frozen-lockfile
 COPY apps/api apps/api
 COPY packages/db packages/db
