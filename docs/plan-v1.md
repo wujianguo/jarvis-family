@@ -1,4 +1,4 @@
-# Jarvis Family：快递功能第一版方案
+# 窝事：快递功能第一版方案
 
 > 2026-11-03 · 方案与原型阶段。原型中的姓名、地址、取件码均为虚构示例，不连接生产服务。
 
@@ -47,6 +47,8 @@ location ^~ /family/ {
 
 草案见 [`packages/db/prisma/schema.prisma`](../packages/db/prisma/schema.prisma)。`User`、`Session`、`Account`、`Verification` 满足 Better Auth 基础存储；最终字段需在安装锁定版本的 Better Auth 后用其 CLI 生成结果校对。`Whitelist` 按邮箱或微信身份建立邀请条目，`ExpressPickup` 记录通知、地点、取件码、来源、状态和操作人；`SmsIngest` 持久保存接入原文、去重键、处理状态及关联快递。首次 migration 只创建空表，不做旧库或 Bitable 导入。
 
+依 2026-11-03 npm 稳定版锁定 `better-auth@1.4.21`、`prisma@7.10.1`、`@prisma/client@7.10.1`；npm 上的 Prisma `8.0.0-rc.*` 不用于 MVP。Better Auth 的 peerDependencies 支持 Prisma / Prisma Client `^5 || ^6 || ^7`。这三个包安装时精确锁入 lockfile，后续升级不得低于上述稳定版。UI 优先用 `@better-auth-ui/react`（当日约 1.7.x；若官方文档推荐包名变化则按文档），按安装时 npm latest 的稳定版锁入 lockfile。Better Auth 基础 schema 仍以锁定版本的 CLI 生成结果校对。
+
 - `Whitelist` 的 email / 微信 `appid + openid` 是可选身份键，至少填一种；邀请与绑定在服务端事务中处理。微信 `openid` 只在同一 `appid` 下唯一；若能拿到 `unionid`，用作跨微信应用辅助关联，不能假定每次返回。
 - 取件码不是全局唯一，列表可有相同码；`done-by-code` 只对待取件记录操作，按 `updatedAt DESC, id DESC` 选一条，并在事务内锁定或使用条件更新防止并发重复完成。UI 在多条同码时应显示匹配目标供确认。
 - `doneAt`、`doneById` 只由状态转换写入。按 ID 完成幂等：已完成则返回原记录，不重写完成时间。编辑取件信息会更新 `updatedAt`，不改变状态。删除不在 MVP 范围。
@@ -55,9 +57,11 @@ location ^~ /family/ {
 
 ## 鉴权与白名单
 
-**Web**：Better Auth 邮箱密码登录，关闭公开注册；管理员先录入白名单，再发邀请/设置初始凭据。使用 `@better-auth-ui/react` + shadcn 组件做表单与会话 UI。Better Auth 服务端用 Prisma adapter；登录时和每次业务请求都检查有效白名单，移除成员后下一次请求立即拒绝。Web 同站 Cookie 为 HttpOnly、Secure、SameSite=Lax；生产环境设置强随机 `BETTER_AUTH_SECRET`、精确 `trustedOrigins`、数据库级限速。
+**Web**：Better Auth 邮箱密码登录，关闭公开注册。MVP 启动时用一次性种子步骤写入 `lsjustin@yeah.net` 的 `Whitelist(enabled=true, role=ADMIN)`，并通过受控初始化流程设置该管理员的邮箱密码账户；完成后首次用邮箱密码登录 Web，即可在 Web 显式绑定微信。后续成员由管理员录入白名单并发邀请/设置初始凭据。使用 `@better-auth-ui/react` + shadcn 组件做表单与会话 UI。Better Auth 服务端用 Prisma adapter；登录时和每次业务请求都检查有效白名单，移除成员后下一次请求立即拒绝。Web 同站 Cookie 为 HttpOnly、Secure、SameSite=Lax；生产环境设置强随机 `BETTER_AUTH_SECRET`、精确 `trustedOrigins`、数据库级限速。
 
-**微信小程序**：`wx.login`/Taro 登录拿一次性 `code`，通过 `POST /api/auth/wechat-mini/exchange` 发给 API；API 用服务端保存的 `appid`/`secret` 调 `jscode2session`，得到 `openid`（可能有 `unionid`），检查 `Whitelist` 的微信身份且 `enabled=true`，随后通过一个经审查的 Better Auth 自定义登录端点/插件创建或关联 User、Account 和 Session。客户端不能自行传 `openid` 作为身份，也不能使用开放注册端点。若没有白名单，返回 `403 WHITELIST_REQUIRED`，不创建可用会话。小程序保存短期会话凭据于受控 storage，并通过 HTTPS 请求携带；具体采用 Better Auth 官方支持的 bearer 插件或同源会话桥接，MVP 要验证所选版本对小程序无 Cookie 环境的支持。退出时撤销服务端会话。微信 `session_key` 不返回客户端、不入日志。
+**微信小程序「窝事」**：已知原始 ID = `gh_a696f88a7ea0`，仅作备案说明，并非 `wx…` AppID。上线前须从微信公众平台取得真正的 AppID 与 AppSecret，分别配置服务端环境变量 `WECHAT_MINI_APPID`、`WECHAT_MINI_SECRET`。`wx.login`/Taro 登录拿一次性 `code`，通过 `POST /api/auth/wechat-mini/exchange` 发给 API；API 用这两个服务端密钥调 `jscode2session`，得到 `openid`（可能有 `unionid`），检查 `Whitelist` 的微信身份且 `enabled=true`，随后通过经审查的 Better Auth 自定义登录端点/插件创建或关联 User、Account 和 Session。客户端不能自行传 `openid` 作为身份，也不能使用开放注册端点。若没有白名单，返回 `403 WHITELIST_REQUIRED`，不创建可用会话。
+
+浏览器 Web 用 Cookie 保存会话；微信小程序没有可用的同站 Cookie，登录成功后 API 返回 Better Auth 官方 bearer / 无 Cookie 会话能力提供的 Bearer token（会话令牌）。小程序将令牌存入受控 storage，此后每个业务请求在 Header 中带 `Authorization: Bearer <token>`，服务端照常校验 Session 与白名单；不另造 JWT 旁路。退出时先调用服务端撤销会话，再清除本地 token。按 Better Auth 1.4.x 文档接入并在真机验证会话续期与失效。微信 `session_key` 永不下发客户端，也不入日志。
 
 **共用身份**：同一 API、同一 `User`/`Session` 表、同一业务授权中间件。管理员将 Web 邮箱与微信身份绑定到同一白名单条目；首次登录在事务中创建/关联 User。禁止仅凭邮箱字符串或客户端传入的微信昵称自动合并账户。管理员可在 Web 中显式绑定并审计。所有业务端点在 Session 认证后再检查 `Whitelist.enabled`；路由守卫仅改善体验，不作为授权边界。登录端点限速，校验微信 code 一次性与失效错误。
 
@@ -78,7 +82,9 @@ location ^~ /family/ {
 
 ## SMS 接入（MVP）
 
-对齐旧 jarvis 的 iOS 捷径 → `/api/sms/ingest` → AI 分类 → 快递创建链路。旧接口未鉴权、用短期 KV 去重，且后台任务只在进程内运行；新版用独立密钥、PG 持久去重和可恢复 worker 承接这条链路，不复用旧数据。捷径提交正文、发件人、短信接收时间和设备标识；服务端先用规则识别常见取件码/地点，不确定时再用 AI 分类与结构化提取。只对确认是快递取件且地点、取件码满足快递创建约束的结果自动建单。AI 输出按同一契约二次校验，不能直接写库。模型、提示词和阈值在实现阶段用真实样本验证，短信原文不发送到未经选定的第三方服务。
+对齐旧 jarvis 的 iOS 捷径 → `/api/sms/ingest` → AI 分类 → 快递创建链路。旧接口未鉴权、用短期 KV 去重，且后台任务只在进程内运行；新版用独立密钥、PG 持久去重和可恢复 worker 承接这条链路，不复用旧数据。捷径提交正文、发件人、短信接收时间和设备标识；服务端先用规则识别常见取件码/地点，只有规则不确定时才调用模型分类与结构化提取。模型选 `claude-haiku-4-5`，经个人 9router 的 OpenAI 兼容入口 `https://token.libms.top/v1` 调用，适合短信短文本提取且成本、延迟较低。仅确认是快递取件、地点和取件码齐全且置信度 ≥ 0.75 时自动建单，否则转 `REVIEW`；阈值在实现阶段用真实样本调整。AI 输出按同一契约二次校验，不能直接写库。短信原文仅发送到已选定的 9router 入口。
+
+部署环境变量示例：`SMS_AI_BASE_URL=https://token.libms.top/v1`、`SMS_AI_MODEL=claude-haiku-4-5`、`SMS_AI_API_KEY`（由 vault / 部署密钥注入，不在方案记录真实值）。管理员在部署环境分别配置和轮换 `SMS_INGEST_TOKEN` 与 `SMS_AI_API_KEY`；iOS 捷径只持有 ingest token，不持有 AI key。
 
 | 方法/对外路径 | 用途 | 关键语义 |
 | --- | --- | --- |
@@ -88,7 +94,7 @@ location ^~ /family/ {
 | `POST /family/api/sms/ingests/:id/retry` | 管理端重试 | 仅 `REVIEW` 记录可重试；保留原 ID，不创建第二条短信或快递 |
 | `POST /family/api/sms/ingests/:id/link` | 管理端审核关联 | 请求 `{ pickupId }`；只对 `REVIEW` 记录生效，检查目标快递存在后关联并置 `LINKED_EXISTING`；若需补录，先调用手工创建接口再关联 |
 
-`SMS_INGEST_TOKEN` 是与 Better Auth 密钥、用户 Session 分离的高熵随机密钥，部署时作为服务端环境变量配置，在捷径的 HTTPS 请求头中使用。服务端做恒定时间比较，拒绝无效密钥 `401`，鉴权前按 IP、鉴权后按设备限速并支持密钥轮换；日志、响应和原型均不展示密钥或完整短信。请求校验 `content` 非空且最多 4000 字、`device` 非空且最多 160 字、`sender` 最多 160 字、`clientEventId` 最多 128 字，并拒绝无效或明显未来的接收时间。捷径应为每条短信生成稳定 `clientEventId` 并在重试时复用；服务端以 `(device, clientEventId)` 唯一约束判重，另计算 `SHA-256(规范化设备|发件人|接收时间精确到秒|规范化正文)` 作为 `fingerprint`，PG 唯一约束处理并发重复。没有 `clientEventId` 也能按指纹判重；捷径必须传原短信 `receivedAt`，避免服务端当前时间导致重试失效。相同正文在不同接收时间是不同短信。唯一键命中且内容/指纹一致时返回既有记录，不重新分类或建单；同一个 `clientEventId` 对应不同内容时返回 `409 IDEMPOTENCY_CONFLICT`。
+`SMS_INGEST_TOKEN` 是与 Better Auth 密钥、用户 Session 分离的高熵随机密钥，部署时作为服务端环境变量配置，在捷径的 HTTPS 请求头中使用。服务端做恒定时间比较，拒绝无效密钥 `401`，鉴权前按 IP、鉴权后按设备限速；轮换时由管理员在部署环境替换密钥并同步更新捷径。日志、响应和原型均不展示密钥或完整短信。请求校验 `content` 非空且最多 4000 字、`device` 非空且最多 160 字、`sender` 最多 160 字、`clientEventId` 最多 128 字，并拒绝无效或明显未来的接收时间。捷径应为每条短信生成稳定 `clientEventId` 并在重试时复用；服务端以 `(device, clientEventId)` 唯一约束判重，另计算 `SHA-256(规范化设备|发件人|接收时间精确到秒|规范化正文)` 作为 `fingerprint`，PG 唯一约束处理并发重复。没有 `clientEventId` 也能按指纹判重；捷径必须传原短信 `receivedAt`，避免服务端当前时间导致重试失效。相同正文在不同接收时间是不同短信。唯一键命中且内容/指纹一致时返回既有记录，不重新分类或建单；同一个 `clientEventId` 对应不同内容时返回 `409 IDEMPOTENCY_CONFLICT`。
 
 接入事务先持久写 `SmsIngest(RECEIVED)` 再返回 202；后台 worker 从 PG 原子领取 `RECEIVED`，处理成 `PROCESSING`，并在锁定该短信行的事务内创建 `ExpressPickup(source=SMS)`、回填 `pickupId`、置 `CREATED`。worker 重启后可重新领取超时的 `PROCESSING`（以 `updatedAt` 为租期依据）；最终写入事务必须复查该行状态和 `pickupId`，保证过期 worker 与新 worker 不重复建单。多条不同短信可关联同一快递。非快递短信置 `IGNORED`；解析失败、AI 错误、字段缺失或低置信度置 `REVIEW` 并记录不含原文的错误码，不自动创建残缺取件记录。管理员可查看原文、手工补录或重试。`REVIEW` 重试和人工关联通过状态条件更新，已关联或已创建时返回 `409`，避免并发覆盖。
 
@@ -117,6 +123,7 @@ location ^~ /family/ {
 1. **MVP**：建立 `packages/db` 与 migration、`packages/contracts`、API；实现 Better Auth Web 登录、微信小程序登录桥接、白名单门禁；实现六个快递 API、SMS 独立密钥接入、PG 去重和持久处理、规则/AI 分类、自动建单与管理端审核；在 Taro 与 Web 接入列表、详情、录入、编辑、按 ID/码完成及来源展示。部署到 `share.libms.top/family/`，以真机验证微信登录、会话续期与失效、白名单撤销、短信重复提交和 worker 重启恢复。
 2. **下一阶段**：通知提醒、成员权限细分。
 
-## 需在 MVP 前定案
+## 上线前待准备
 
-微信小程序 `appid`、家庭管理员的初始邮箱及白名单初始化流程；Better Auth/Prisma 具体版本与小程序会话传输方案；SMS 分类模型、置信度阈值及密钥发放/轮换流程。服务域名已定为 `share.libms.top`，上线前还需核对现有 nginx `/family/` 路由。这些不影响本轮原型评审。
+- 从微信公众平台取得小程序 `wx…` AppID + AppSecret，配置 `WECHAT_MINI_APPID` / `WECHAT_MINI_SECRET`；已知 `gh_` 原始 ID 不能用于 `jscode2session`。
+- 核对现有 nginx `/family/` 路由，并在部署环境注入 Better Auth 与 SMS 的正式密钥。
