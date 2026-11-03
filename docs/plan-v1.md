@@ -49,7 +49,7 @@ location ^~ /family/ {
 
 依 2026-11-03 npm 稳定版锁定 `better-auth@1.4.21`、`prisma@7.10.1`、`@prisma/client@7.10.1`；npm 上的 Prisma `8.0.0-rc.*` 不用于 MVP。Better Auth 的 peerDependencies 支持 Prisma / Prisma Client `^5 || ^6 || ^7`。这三个包安装时精确锁入 lockfile，后续升级不得低于上述稳定版。UI 优先用 `@better-auth-ui/react`（当日约 1.7.x；若官方文档推荐包名变化则按文档），按安装时 npm latest 的稳定版锁入 lockfile。Better Auth 基础 schema 仍以锁定版本的 CLI 生成结果校对。
 
-- `Whitelist` 的 email / 微信 `appid + openid` 是可选身份键，至少填一种；邀请与绑定在服务端事务中处理。微信 `openid` 只在同一 `appid` 下唯一；若能拿到 `unionid`，用作跨微信应用辅助关联，不能假定每次返回。
+- `Whitelist` 的 email、微信 `appid + openid` 或 `unionid` 是可选身份键，至少填一种；管理员可按 `appid + openid` 或 `unionid` 录入微信白名单。草案已有 `wechatAppId`、`wechatOpenId`、`wechatUnionId` 字段；实现时须同步调整草案中的应用层校验说明。邀请与绑定在服务端事务中处理。微信 `openid` 只在同一 `appid` 下唯一；`unionid` 用作跨微信应用关联，不能假定每次返回。
 - 取件码不是全局唯一，列表可有相同码；`done-by-code` 只对待取件记录操作，按 `updatedAt DESC, id DESC` 选一条，并在事务内锁定或使用条件更新防止并发重复完成。UI 在多条同码时应显示匹配目标供确认。
 - `doneAt`、`doneById` 只由状态转换写入。按 ID 完成幂等：已完成则返回原记录，不重写完成时间。编辑取件信息会更新 `updatedAt`，不改变状态。删除不在 MVP 范围。
 - 手工创建的 `source=MANUAL` 且 `createdById` 为会话用户；SMS 自动创建的 `source=SMS` 且 `createdById` 为空，通过 `SmsIngest.pickupId` 追溯来源。API 需校验这一约束。短信处理状态是独立流程状态，不等于取件状态。
@@ -59,7 +59,9 @@ location ^~ /family/ {
 
 **Web**：Better Auth 邮箱密码登录，关闭公开注册。MVP 启动时用一次性种子步骤写入 `lsjustin@yeah.net` 的 `Whitelist(enabled=true, role=ADMIN)`，并通过受控初始化流程设置该管理员的邮箱密码账户；完成后首次用邮箱密码登录 Web，即可在 Web 显式绑定微信。后续成员由管理员录入白名单并发邀请/设置初始凭据。使用 `@better-auth-ui/react` + shadcn 组件做表单与会话 UI。Better Auth 服务端用 Prisma adapter；登录时和每次业务请求都检查有效白名单，移除成员后下一次请求立即拒绝。Web 同站 Cookie 为 HttpOnly、Secure、SameSite=Lax；生产环境设置强随机 `BETTER_AUTH_SECRET`、精确 `trustedOrigins`、数据库级限速。
 
-**微信小程序「窝事」**：已知原始 ID = `gh_a696f88a7ea0`，仅作备案说明，并非 `wx…` AppID。上线前须从微信公众平台取得真正的 AppID 与 AppSecret，分别配置服务端环境变量 `WECHAT_MINI_APPID`、`WECHAT_MINI_SECRET`。`wx.login`/Taro 登录拿一次性 `code`，通过 `POST /api/auth/wechat-mini/exchange` 发给 API；API 用这两个服务端密钥调 `jscode2session`，得到 `openid`（可能有 `unionid`），检查 `Whitelist` 的微信身份且 `enabled=true`，随后通过经审查的 Better Auth 自定义登录端点/插件创建或关联 User、Account 和 Session。客户端不能自行传 `openid` 作为身份，也不能使用开放注册端点。若没有白名单，返回 `403 WHITELIST_REQUIRED`，不创建可用会话。
+**微信小程序「窝事」**：AppID 已确认为 `wxce94463a6a805e99`，服务端配置 `WECHAT_MINI_APPID=wxce94463a6a805e99`；原始 ID `gh_a696f88a7ea0` 仅作备案。AppSecret 尚未提供，上线前必须配置服务端 `WECHAT_MINI_SECRET`。未登录且无有效会话时，先用 `wx.login`/Taro 登录获取一次性 `code`，调用 `POST /api/auth/wechat-mini/identity`：API 用服务端 AppID/Secret 调 `jscode2session`，只返回该 code 对应的 `openid` 和有则返回的 `unionid`，不创建 User、Account、Session，不要求白名单，也不返回 `session_key`。接口限速，校验 code 一次性与失效错误，日志不打印 code 或身份值。小程序首页展示这些身份供复制给管理员；不能用客户端自行传入的身份值认证。已有有效会话且仍在白名单者直接进入正常快递列表。
+
+管理员按 `appid + openid` 或 `unionid` 加入白名单后，用户重新取得 `wx.login` code，经 `POST /api/auth/wechat-mini/exchange` 登录；API 用服务端密钥调用 `jscode2session`，以返回的身份匹配 `Whitelist(enabled=true)`，随后通过经审查的 Better Auth 自定义登录端点/插件创建或关联 User、Account 和 Session。不能使用开放注册端点。若没有白名单，返回 `403 WHITELIST_REQUIRED`，不创建可用会话，客户端继续展示身份页与加白名单指引。
 
 浏览器 Web 用 Cookie 保存会话；微信小程序没有可用的同站 Cookie，登录成功后 API 返回 Better Auth 官方 bearer / 无 Cookie 会话能力提供的 Bearer token（会话令牌）。小程序将令牌存入受控 storage，此后每个业务请求在 Header 中带 `Authorization: Bearer <token>`，服务端照常校验 Session 与白名单；不另造 JWT 旁路。退出时先调用服务端撤销会话，再清除本地 token。按 Better Auth 1.4.x 文档接入并在真机验证会话续期与失效。微信 `session_key` 永不下发客户端，也不入日志。
 
@@ -82,9 +84,9 @@ location ^~ /family/ {
 
 ## SMS 接入（MVP）
 
-对齐旧 jarvis 的 iOS 捷径 → `/api/sms/ingest` → AI 分类 → 快递创建链路。旧接口未鉴权、用短期 KV 去重，且后台任务只在进程内运行；新版用独立密钥、PG 持久去重和可恢复 worker 承接这条链路，不复用旧数据。捷径提交正文、发件人、短信接收时间和设备标识；服务端先用规则识别常见取件码/地点，只有规则不确定时才调用模型分类与结构化提取。模型选 `claude-haiku-4-5`，经个人 9router 的 OpenAI 兼容入口 `https://token.libms.top/v1` 调用，适合短信短文本提取且成本、延迟较低。仅确认是快递取件、地点和取件码齐全且置信度 ≥ 0.75 时自动建单，否则转 `REVIEW`；阈值在实现阶段用真实样本调整。AI 输出按同一契约二次校验，不能直接写库。短信原文仅发送到已选定的 9router 入口。
+对齐旧 jarvis 的 iOS 捷径 → `/api/sms/ingest` → AI 分类 → 快递创建链路。旧接口未鉴权、用短期 KV 去重，且后台任务只在进程内运行；新版用独立密钥、PG 持久去重和可恢复 worker 承接这条链路，不复用旧数据。捷径提交正文、发件人、短信接收时间和设备标识；服务端先用规则识别常见取件码/地点，只有规则不确定时才调用模型分类与结构化提取。模型选 `deepseek-flash`，经个人 9router 的 OpenAI 兼容入口 `https://token.libms.top/v1` 调用，该入口已有此模型 ID。仅确认是快递取件、地点和取件码齐全且置信度 ≥ 0.75 时自动建单，否则转 `REVIEW`；阈值在实现阶段用真实样本调整。AI 输出按同一契约二次校验，不能直接写库。短信原文仅发送到已选定的 9router 入口。
 
-部署环境变量示例：`SMS_AI_BASE_URL=https://token.libms.top/v1`、`SMS_AI_MODEL=claude-haiku-4-5`、`SMS_AI_API_KEY`（由 vault / 部署密钥注入，不在方案记录真实值）。管理员在部署环境分别配置和轮换 `SMS_INGEST_TOKEN` 与 `SMS_AI_API_KEY`；iOS 捷径只持有 ingest token，不持有 AI key。
+部署环境变量示例：`SMS_AI_BASE_URL=https://token.libms.top/v1`、`SMS_AI_MODEL=deepseek-flash`、`SMS_AI_API_KEY`（由 vault / 部署密钥注入，不在方案记录真实值）。管理员在部署环境分别配置和轮换 `SMS_INGEST_TOKEN` 与 `SMS_AI_API_KEY`；iOS 捷径只持有 ingest token，不持有 AI key。
 
 | 方法/对外路径 | 用途 | 关键语义 |
 | --- | --- | --- |
@@ -104,7 +106,7 @@ location ^~ /family/ {
 
 ### 小程序（Taro）
 
-`启动/微信登录 → 白名单拦截或快递列表`；列表以“待取 / 已取”切换，卡片突出取件码与地点，底部固定“录入快递”。点击卡片进入详情：原文、创建时间、编辑入口和“标记已取”。待取列表每条卡片直接提供「标记已取」，一键完成，不要求输入取件码；按取件码完成仅保留在 Web 管理端。录入页只要求地点与码，原文可选；成功回到待取列表并提示。
+`启动 → 检查会话 → 无会话时 wx.login 探测身份并展示未登录首页 → 管理员加白名单 → 微信登录 → 快递列表`。未登录首页大号展示 `openid`，展示 `unionid`（无则显示「暂无」）、原始 ID 与 AppID，各有「复制」按钮；说明“把 openid 或 unionid 发给管理员加入白名单后再登录”。已有有效会话且白名单有效则直接进入列表，不停留在身份页。列表以“待取 / 已取”切换，卡片突出取件码与地点，底部固定“录入快递”。点击卡片进入详情：原文、创建时间、编辑入口和“标记已取”。待取列表每条卡片直接提供「标记已取」，一键完成，不要求输入取件码；按取件码完成仅保留在 Web 管理端。录入页只要求地点与码，原文可选；成功回到待取列表并提示。
 
 ### Web 管理端（shadcn blocks 风格）
 
@@ -112,7 +114,7 @@ location ^~ /family/ {
 
 ## 原型与打开方式
 
-- **交互演示**：直接用浏览器打开 [`prototypes/index.html`](../prototypes/index.html)，切换 Web / 小程序，体验登录、白名单拒绝、列表、详情、录入、编辑及完成。所有数据只在浏览器内存中演示，刷新即重置。
+- **交互演示**：直接用浏览器打开 [`prototypes/index.html`](../prototypes/index.html)，切换 Web / 小程序，体验未登录身份与复制、演示登录、白名单拒绝、列表、详情、录入、编辑及完成。所有数据只在浏览器内存中演示，刷新即重置。
 - **设计画布**：[`designs/express-v1/project/canvas.json`](../designs/express-v1/project/canvas.json)，运行 `node .agents/skills/claude-design/scripts/artifact.mjs open designs/express-v1`；可浏览 Web 与小程序主要画面。
 - **设计系统**：[`designs/family-system/project/design-system.json`](../designs/family-system/project/design-system.json)，运行 `node .agents/skills/claude-design-system/scripts/artifact.mjs open designs/family-system`；查看颜色、字体、间距及组件规范。
 
@@ -125,5 +127,5 @@ location ^~ /family/ {
 
 ## 上线前待准备
 
-- 从微信公众平台取得小程序 `wx…` AppID + AppSecret，配置 `WECHAT_MINI_APPID` / `WECHAT_MINI_SECRET`；已知 `gh_` 原始 ID 不能用于 `jscode2session`。
+- 小程序 AppID 已确认，部署时配置 `WECHAT_MINI_APPID=wxce94463a6a805e99`；上线前仍须取得 AppSecret 并配置 `WECHAT_MINI_SECRET`。原始 ID `gh_a696f88a7ea0` 仅备案，不能用于 `jscode2session`。
 - 核对现有 nginx `/family/` 路由，并在部署环境注入 Better Auth 与 SMS 的正式密钥。

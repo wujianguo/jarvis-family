@@ -9,9 +9,9 @@
 
 交互演示使用浏览器内的虚构数据，刷新后重置；尚未连接 API 或微信登录。
 
-微信小程序「窝事」的原始 ID 为 `gh_a696f88a7ea0`；正式登录仍需微信公众平台的 `wx…` AppID 和 AppSecret，配置为 `WECHAT_MINI_APPID` / `WECHAT_MINI_SECRET`。MVP 管理员邮箱为 `lsjustin@yeah.net`，初始化白名单后用邮箱密码首次登录并在 Web 绑定微信。具体方案见上方文档。
+微信小程序「窝事」已确认 `WECHAT_MINI_APPID=wxce94463a6a805e99`，原始 ID 为 `gh_a696f88a7ea0`。上线前仍需取得 AppSecret 并配置 `WECHAT_MINI_SECRET`。未登录首页将展示可复制的微信身份，供管理员按 `appid + openid` 或 `unionid` 加入白名单；原型只用虚构数据演示。MVP 管理员邮箱为 `lsjustin@yeah.net`，初始化白名单后用邮箱密码首次登录并在 Web 绑定微信。具体方案见上方文档。
 
-第一版范围包括 iOS 捷径短信接入：短信经独立密钥鉴权后进入 API，PostgreSQL 持久去重，规则/AI 分类后自动创建快递；无法解析的记录供管理端审核。短信接口规划为 `POST https://share.libms.top/family/api/sms/ingest`，目前仅有方案与 Prisma 草案，尚未上线。
+第一版范围包括 iOS 捷径短信接入：短信经独立密钥鉴权后进入 API，PostgreSQL 持久去重，规则优先、规则不确定时用 `SMS_AI_MODEL=deepseek-flash` 分类，达到 0.75 置信度且字段齐全才自动创建快递；无法解析的记录供管理端审核。短信接口规划为 `POST https://share.libms.top/family/api/sms/ingest`，目前仅有方案与 Prisma 草案，尚未上线。
 
 目标部署在个人阿里云北京机器 `101.200.151.162`，复用 `share.libms.top` 的 nginx 与 HTTPS。现有静态站 `/` 和已部署的原型 `/jarvis-family/` 保留；未来正式 Web 使用 `/family/`，API 使用 `/family/api/`。小程序需把 `https://share.libms.top` 加入合法 request 域名。新 PostgreSQL 库从零开始，不导入旧 jarvis 或飞书 Bitable 历史快递；具体反代、鉴权和数据设计见[方案文档](docs/plan-v1.md)。
 
