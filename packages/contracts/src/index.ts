@@ -12,7 +12,7 @@ export const pickupPatch = pickupInput
 export const smsInput = z.object({
   content: z.string().trim().min(1).max(4000),
   sender: z.string().trim().max(160).optional(),
-  receivedAt: z.iso.datetime({ offset: true }),
+  receivedAt: z.iso.datetime({ offset: true }).optional(),
   device: z.string().trim().min(1).max(160),
   clientEventId: z.string().trim().min(1).max(128).optional(),
 })

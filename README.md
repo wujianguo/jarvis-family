@@ -25,3 +25,5 @@ Web 使用 `/family` 路径；API 默认监听本机 `3001` 端口。根目录�
 共享 UI 组件在 `packages/ui`；按需使用 `pnpm dlx shadcn` 添加。
 
 Web 的「录入快递」支持只粘贴短信正文或只上传一张通知截图。规则先解析短信，不确定时使用 `SMS_AI_*`；截图识别需要 `SMS_AI_MODEL` 指向支持图片输入的 OpenAI 兼容模型。解析不足会显示可编辑预览，确认后才保存。API 入口见 [服务实现](apps/api/src/server.ts)。
+
+iOS 捷径调用 `POST /family/api/sms/ingest` 时提交 `{ content, device, sender?, receivedAt?, clientEventId? }`，并使用 `Authorization: Bearer <SMS_INGEST_TOKEN>`。`receivedAt` 可省略；省略、空值或无效值会使用服务端收到请求的时间。合法值须为带 offset 的 ISO datetime，晚于服务端时间 5 分钟会被拒绝。建议为每条短信提供稳定的 `clientEventId`，以便省略时间时仍能识别重试。
