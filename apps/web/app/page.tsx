@@ -90,6 +90,15 @@ type Pickup = {
   status: string
   createdAt: string
 }
+type NoticeResponse =
+  | { status: "CREATED"; pickup: Pickup }
+  | {
+      status: "REVIEW"
+      address: string
+      pickupCode: string
+      rawInfo: string | null
+      reason?: string
+    }
 type Sms = {
   id: string
   sender?: string
@@ -122,6 +131,10 @@ function Home() {
   const [selected, setSelected] = useState<Pickup | null>(null)
   const [smsSelected, setSmsSelected] = useState<Sms | null>(null)
   const [editing, setEditing] = useState(false)
+  const [noticeFile, setNoticeFile] = useState<File | null>(null)
+  const [noticeReview, setNoticeReview] = useState(false)
+  const [noticeReason, setNoticeReason] = useState("")
+  const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
     address: "",
     pickupCode: "",
@@ -304,6 +317,9 @@ function Home() {
                     recipientName: "",
                     rawInfo: "",
                   })
+                  setNoticeFile(null)
+                  setNoticeReview(false)
+                  setNoticeReason("")
                   setEditing(true)
                 }}
               >
@@ -406,6 +422,8 @@ function Home() {
                             recipientName: selected.recipientName || "",
                             rawInfo: selected.rawInfo || "",
                           })
+                          setNoticeFile(null)
+                          setNoticeReview(false)
                           setEditing(true)
                         }}
                       >
@@ -734,25 +752,81 @@ function Home() {
                 className="flex flex-col gap-4"
                 onSubmit={(e) => {
                   e.preventDefault()
+                  if (saving) return
+                  setSaving(true)
                   void action(async () => {
-                    await api(
-                      selected
-                        ? `/express/pickups/${selected.id}`
-                        : "/express/pickups",
-                      selected ? "PATCH" : "POST",
-                      form
-                    )
-                    setEditing(false)
-                    setSelected(null)
+                    try {
+                      if (
+                        !selected &&
+                        !noticeReview &&
+                        (noticeFile || form.rawInfo.trim())
+                      ) {
+                        const image = noticeFile
+                          ? await new Promise<string>((resolve, reject) => {
+                              const reader = new FileReader()
+                              reader.onload = () =>
+                                resolve(String(reader.result))
+                              reader.onerror = () =>
+                                reject(new Error("截图读取失败"))
+                              reader.readAsDataURL(noticeFile)
+                            })
+                          : undefined
+                        const result = await api<NoticeResponse>(
+                          "/express/pickups/from-notice",
+                          "POST",
+                          image ? { image } : { content: form.rawInfo }
+                        )
+                        if (result.status === "REVIEW") {
+                          setForm({
+                            ...form,
+                            address: result.address,
+                            pickupCode: result.pickupCode,
+                            rawInfo: result.rawInfo || form.rawInfo,
+                          })
+                          setNoticeReview(true)
+                          setNoticeReason(result.reason || "INCOMPLETE")
+                          return
+                        }
+                      } else {
+                        await api(
+                          selected
+                            ? `/express/pickups/${selected.id}`
+                            : "/express/pickups",
+                          selected ? "PATCH" : "POST",
+                          form
+                        )
+                      }
+                      setEditing(false)
+                      setSelected(null)
+                      setNoticeFile(null)
+                      setNoticeReview(false)
+                    } finally {
+                      setSaving(false)
+                    }
                   })
                 }}
               >
+                {noticeReview && (
+                  <Alert>
+                    <AlertDescription>
+                      {noticeReason === "AI_NOT_CONFIGURED"
+                        ? "图片识别尚未配置，请手填地点和取件码后确认保存。"
+                        : noticeReason === "AI_FAILED"
+                          ? "识别暂时失败，请核对并补齐信息后确认保存。"
+                          : "识别结果不完整或不确定，请核对并补齐信息后确认保存。"}
+                    </AlertDescription>
+                  </Alert>
+                )}
                 <FieldGroup>
                   <Field>
                     <FieldLabel htmlFor="pickup-address">取件地点</FieldLabel>
                     <Input
                       id="pickup-address"
-                      required
+                      required={
+                        !!selected ||
+                        noticeReview ||
+                        (!form.rawInfo.trim() && !noticeFile)
+                      }
                       maxLength={200}
                       value={form.address}
                       onChange={(e) =>
@@ -764,7 +838,11 @@ function Home() {
                     <FieldLabel htmlFor="pickup-code">取件码</FieldLabel>
                     <Input
                       id="pickup-code"
-                      required
+                      required={
+                        !!selected ||
+                        noticeReview ||
+                        (!form.rawInfo.trim() && !noticeFile)
+                      }
                       maxLength={80}
                       value={form.pickupCode}
                       onChange={(e) =>
@@ -784,16 +862,52 @@ function Home() {
                     />
                   </Field>
                   <Field>
-                    <FieldLabel htmlFor="pickup-info">短信原文</FieldLabel>
+                    <FieldLabel htmlFor="pickup-info">短信正文</FieldLabel>
                     <Textarea
                       id="pickup-info"
                       maxLength={4000}
                       value={form.rawInfo}
-                      onChange={(e) =>
+                      placeholder="粘贴通知短信，可只填这一项"
+                      onChange={(e) => {
                         setForm({ ...form, rawInfo: e.target.value })
-                      }
+                        if (e.target.value) setNoticeFile(null)
+                      }}
                     />
                   </Field>
+                  {!selected && (
+                    <Field>
+                      <FieldLabel htmlFor="pickup-image">通知截图</FieldLabel>
+                      <Input
+                        id="pickup-image"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null
+                          if (
+                            file &&
+                            (![
+                              "image/jpeg",
+                              "image/png",
+                              "image/webp",
+                            ].includes(file.type) ||
+                              file.size > 3_000_000)
+                          ) {
+                            setError(
+                              "请上传小于 3 MB 的 JPEG、PNG 或 WebP 图片"
+                            )
+                            e.target.value = ""
+                            return
+                          }
+                          setError("")
+                          setNoticeFile(file)
+                          if (file) setForm({ ...form, rawInfo: "" })
+                        }}
+                      />
+                      <small className="text-muted-foreground">
+                        只传一张截图也可以录入
+                      </small>
+                    </Field>
+                  )}
                 </FieldGroup>
                 <div className="flex justify-end gap-2">
                   <Button
@@ -803,7 +917,15 @@ function Home() {
                   >
                     取消
                   </Button>
-                  <Button variant="default">保存</Button>
+                  <Button variant="default" disabled={saving}>
+                    {saving
+                      ? "处理中…"
+                      : noticeReview
+                        ? "确认并保存"
+                        : !selected && (noticeFile || form.rawInfo.trim())
+                          ? "识别并录入"
+                          : "保存"}
+                  </Button>
                 </div>
               </form>
             </CardContent>

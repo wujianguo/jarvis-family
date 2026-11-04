@@ -14,6 +14,7 @@ import { auth } from "./auth.js"
 import { hashPassword } from "better-auth/crypto"
 import { createHash, timingSafeEqual } from "node:crypto"
 import { z } from "zod"
+import { parseNotice } from "./notice-parser.js"
 
 type Handler = (req: Request, res: Response) => Promise<void>
 const run =
@@ -73,6 +74,7 @@ app.use("/api/auth", (req, res, next) => {
     }
   })
 })
+app.use("/api/express/pickups/from-notice", express.json({ limit: "5mb" }))
 app.use(express.json({ limit: "16kb" }))
 const fail = (res: Response, status: number, code: string, message: string) =>
   res.status(status).json({ error: { code, message } })
@@ -333,6 +335,71 @@ app.post(
       }
       throw e
     }
+  })
+)
+const noticeInput = z
+  .object({
+    content: z.string().trim().min(1).max(4000).optional(),
+    image: z.string().max(4_200_000).optional(),
+  })
+  .refine((v) => Number(!!v.content) + Number(!!v.image) === 1)
+function validNoticeImage(data: string) {
+  const match =
+    /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(data)
+  if (!match) return false
+  const bytes = Buffer.from(match[2], "base64")
+  if (!bytes.length || bytes.length > 3_000_000) return false
+  const magic =
+    match[1] === "jpeg"
+      ? bytes.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))
+      : match[1] === "png"
+        ? bytes
+            .subarray(0, 8)
+            .equals(
+              Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+            )
+        : bytes.subarray(0, 4).toString() === "RIFF" &&
+          bytes.subarray(8, 12).toString() === "WEBP"
+  return magic && bytes.toString("base64") === match[2]
+}
+app.post(
+  `${base}/from-notice`,
+  run(async (req, res) => {
+    const p = await principal(req, res)
+    if (!p) return
+    const v = noticeInput.safeParse(req.body)
+    if (!v.success || (v.data.image && !validNoticeImage(v.data.image))) {
+      fail(
+        res,
+        400,
+        "VALIDATION_ERROR",
+        "请提交短信正文或一张 JPEG、PNG、WebP 截图"
+      )
+      return
+    }
+    const result = await parseNotice(v.data)
+    const rawInfo = result.rawText?.slice(0, 4000) || null
+    if (!result.ready || !result.address || !result.pickupCode) {
+      res.json({
+        status: "REVIEW",
+        address: result.address || "",
+        pickupCode: result.pickupCode || "",
+        rawInfo,
+        confidence: result.confidence,
+        reason: result.reason,
+      })
+      return
+    }
+    const pickup = await db.expressPickup.create({
+      data: {
+        address: result.address,
+        pickupCode: result.pickupCode,
+        rawInfo,
+        source: "MANUAL",
+        createdById: p.user.id,
+      },
+    })
+    res.status(201).json({ status: "CREATED", pickup })
   })
 )
 app.get(
@@ -776,90 +843,16 @@ app.patch(
   })
 )
 
-type Extracted = {
-  isPickup: boolean
-  address?: string
-  pickupCode?: string
-  confidence: number
-}
-function ruleExtract(content: string): Extracted | null {
-  const code = content.match(
-    /(?:取件码|提货码|凭码|取货码)[：:\s]*([A-Za-z0-9-]{4,30})/
-  )
-  const address = content.match(
-    /(?:请至|到|存放在|存于|已到|放在)([^，。；;\n]{2,80}?)(?:取件|领取|，|。|；|;|$)/
-  )
-  if (code && address)
-    return {
-      isPickup: true,
-      pickupCode: code[1],
-      address: address[1].trim(),
-      confidence: 0.8,
-    }
-  if (!/(快递|包裹|取件|驿站|菜鸟|丰巢)/.test(content))
-    return { isPickup: false, confidence: 0.9 }
-  return null
-}
-async function aiExtract(content: string): Promise<Extracted> {
-  const key = process.env.SMS_AI_API_KEY
-  const base = process.env.SMS_AI_BASE_URL
-  if (!key || !base) throw new Error("AI_NOT_CONFIGURED")
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 15000)
-  try {
-    const r = await fetch(`${base.replace(/\/$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: process.env.SMS_AI_MODEL || "deepseek-flash",
-        temperature: 0,
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content:
-              "将短信分类并提取快递取件信息。只返回 JSON: isPickup(boolean), address(string), pickupCode(string), confidence(0-1)。无法确认就降低置信度。",
-          },
-          { role: "user", content },
-        ],
-      }),
-      signal: controller.signal,
-    })
-    if (!r.ok) throw new Error("AI_HTTP_ERROR")
-    const raw = (await r.json()) as {
-      choices?: Array<{ message?: { content?: string } }>
-    }
-    const parsed = JSON.parse(raw.choices?.[0]?.message?.content || "{}")
-    return z
-      .object({
-        isPickup: z.boolean(),
-        address: z.string().max(200).optional(),
-        pickupCode: z.string().max(80).optional(),
-        confidence: z.number().min(0).max(1),
-      })
-      .parse(parsed)
-  } finally {
-    clearTimeout(timeout)
-  }
-}
 async function processSms(id: string) {
   const item = await db.smsIngest.findUnique({ where: { id } })
   if (!item || item.status !== "PROCESSING") return
-  let out: Extracted
-  try {
-    out = ruleExtract(item.content) || (await aiExtract(item.content))
-  } catch (e) {
+  const out = await parseNotice({ content: item.content })
+  if (out.reason === "AI_NOT_CONFIGURED" || out.reason === "AI_FAILED") {
     await db.smsIngest.updateMany({
       where: { id, status: "PROCESSING" },
       data: {
         status: "REVIEW",
-        errorCode:
-          e instanceof Error && e.message === "AI_NOT_CONFIGURED"
-            ? "AI_NOT_CONFIGURED"
-            : "AI_FAILED",
+        errorCode: out.reason,
       },
     })
     return
@@ -873,7 +866,7 @@ async function processSms(id: string) {
   }
   const address = out.address?.trim(),
     pickupCode = out.pickupCode?.trim()
-  if (!address || !pickupCode || out.confidence < 0.75) {
+  if (!out.ready || !address || !pickupCode) {
     await db.smsIngest.updateMany({
       where: { id, status: "PROCESSING" },
       data: { status: "REVIEW", errorCode: "LOW_CONFIDENCE" },

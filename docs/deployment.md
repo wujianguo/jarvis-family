@@ -13,7 +13,7 @@ Repository Secrets：
 
 ## ECS 本地环境
 
-`/home/ecs-user/woshi/.env` 仅 ECS 用户可读，不进入 git。必需项：`DATABASE_URL`、`BETTER_AUTH_SECRET`、`BETTER_AUTH_URL`、`WECHAT_MINI_APPID`、`WECHAT_MINI_SECRET`、`ADMIN_EMAIL`。部署元数据：`PUBLIC_ORIGIN`、`PUBLIC_API_BASE`；`WECHAT_MINI_ORIGINAL_ID` 仅供展示或备案。短信功能另需 `SMS_INGEST_TOKEN`、`SMS_AI_BASE_URL`、`SMS_AI_MODEL`、`SMS_AI_API_KEY`。PostgreSQL 限制在服务器回环地址。
+`/home/ecs-user/woshi/.env` 仅 ECS 用户可读，不进入 git。必需项：`DATABASE_URL`、`BETTER_AUTH_SECRET`、`BETTER_AUTH_URL`、`WECHAT_MINI_APPID`、`WECHAT_MINI_SECRET`、`ADMIN_EMAIL`。部署元数据：`PUBLIC_ORIGIN`、`PUBLIC_API_BASE`；`WECHAT_MINI_ORIGINAL_ID` 仅供展示或备案。短信功能另需 `SMS_INGEST_TOKEN`、`SMS_AI_BASE_URL`、`SMS_AI_MODEL`、`SMS_AI_API_KEY`。Web 截图识别复用这些服务端变量，`SMS_AI_MODEL` 需支持图片输入；没有可用视觉模型时，用户须在预览中手填确认。PostgreSQL 限制在服务器回环地址。
 
 首次运行 `scripts/bootstrap-server.sh` 时，通过 shell 提供 `BETTER_AUTH_URL`、`WECHAT_MINI_APPID`、`ADMIN_EMAIL`、`PUBLIC_ORIGIN`、`PUBLIC_API_BASE`、`SMS_AI_BASE_URL`。运行 `scripts/setup-server.sh` 时提供 `NGINX_SITE_CONFIG`（现有 nginx 站点配置的绝对路径）。已建好的服务器 `.env` 也须补齐 `ADMIN_EMAIL`；变更环境变量后重启 API 容器。AppID 是微信公开标识，不是 AppSecret。`WECHAT_MINI_SECRET` 只放服务器环境或 CI Secret，绝不注入前端或小程序。
 
