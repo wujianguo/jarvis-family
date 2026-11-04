@@ -917,7 +917,7 @@ function Home() {
                   >
                     取消
                   </Button>
-                  <Button variant="default" disabled={saving}>
+                  <Button type="submit" variant="default" disabled={saving}>
                     {saving
                       ? "处理中…"
                       : noticeReview
