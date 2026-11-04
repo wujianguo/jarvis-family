@@ -1,7 +1,8 @@
 import { db } from "@workspace/db"
 import { hashPassword } from "better-auth/crypto"
 
-const email = "lsjustin@yeah.net"
+const email = process.env.ADMIN_EMAIL?.trim().toLowerCase()
+if (!email) throw new Error("ADMIN_EMAIL is required to seed the admin account")
 const password = process.env.ADMIN_INITIAL_PASSWORD
 if (!password || password.length < 8)
   throw new Error("ADMIN_INITIAL_PASSWORD must contain at least 8 characters")

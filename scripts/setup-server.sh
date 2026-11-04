@@ -54,7 +54,7 @@ location ^~ /family/ {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 }
 CONF
-config=/etc/nginx/sites-available/share.libms.top
+config="${NGINX_SITE_CONFIG:?NGINX_SITE_CONFIG is required (site configuration path)}"
 if ! sudo grep -q 'snippets/woshi.conf' "$config"; then
   sudo cp "$config" "${config}.woshi-backup-$(date +%Y%m%d%H%M%S)"
   sudo sed -i '0,/    index index.html;/s#    index index.html;#    index index.html;\n    include /etc/nginx/snippets/woshi.conf;#' "$config"

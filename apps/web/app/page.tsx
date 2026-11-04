@@ -76,6 +76,10 @@ async function api<T>(
   if (!r.ok) throw new Error(j.error?.message || "请求失败")
   return j
 }
+async function miniAppId() {
+  return (await api<{ wechatMiniAppId: string }>("/public-config"))
+    .wechatMiniAppId
+}
 type Pickup = {
   id: string
   address: string
@@ -591,9 +595,9 @@ function Home() {
                           m.wechatOpenId || ""
                         )
                         if (openid)
-                          void action(() =>
+                          void action(async () =>
                             api(`/whitelist/${m.id}`, "PATCH", {
-                              wechatAppId: "wxce94463a6a805e99",
+                              wechatAppId: await miniAppId(),
                               wechatOpenId: openid,
                             })
                           )
@@ -633,7 +637,7 @@ function Home() {
                         displayName: member.displayName,
                         email: member.email || undefined,
                         wechatAppId: member.wechatOpenId
-                          ? "wxce94463a6a805e99"
+                          ? await miniAppId()
                           : undefined,
                         wechatOpenId: member.wechatOpenId || undefined,
                         wechatUnionId: member.wechatUnionId || undefined,

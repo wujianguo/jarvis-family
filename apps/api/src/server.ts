@@ -108,9 +108,16 @@ async function principal(req: Request, res: Response, admin = false) {
   }
   return { user: session.user, white }
 }
-const miniId = process.env.WECHAT_MINI_APPID || "wxce94463a6a805e99"
+const miniId = process.env.WECHAT_MINI_APPID?.trim()
+if (process.env.NODE_ENV === "production" && !miniId)
+  throw new Error("WECHAT_MINI_APPID is required in production")
+app.get("/api/public-config", (_req, res) => {
+  if (!miniId) return fail(res, 503, "WECHAT_NOT_CONFIGURED", "微信配置缺失")
+  res.json({ wechatMiniAppId: miniId })
+})
 async function wechat(code: string) {
-  if (!process.env.WECHAT_MINI_SECRET) throw new Error("WECHAT_NOT_CONFIGURED")
+  if (!miniId || !process.env.WECHAT_MINI_SECRET)
+    throw new Error("WECHAT_NOT_CONFIGURED")
   const url = new URL("https://api.weixin.qq.com/sns/jscode2session")
   url.searchParams.set("appid", miniId)
   url.searchParams.set("secret", process.env.WECHAT_MINI_SECRET)
@@ -795,34 +802,32 @@ function ruleExtract(content: string): Extracted | null {
 }
 async function aiExtract(content: string): Promise<Extracted> {
   const key = process.env.SMS_AI_API_KEY
-  if (!key) throw new Error("AI_NOT_CONFIGURED")
+  const base = process.env.SMS_AI_BASE_URL
+  if (!key || !base) throw new Error("AI_NOT_CONFIGURED")
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 15000)
   try {
-    const r = await fetch(
-      `${process.env.SMS_AI_BASE_URL || "https://token.libms.top/v1"}/chat/completions`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${key}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: process.env.SMS_AI_MODEL || "deepseek-flash",
-          temperature: 0,
-          response_format: { type: "json_object" },
-          messages: [
-            {
-              role: "system",
-              content:
-                "将短信分类并提取快递取件信息。只返回 JSON: isPickup(boolean), address(string), pickupCode(string), confidence(0-1)。无法确认就降低置信度。",
-            },
-            { role: "user", content },
-          ],
-        }),
-        signal: controller.signal,
-      }
-    )
+    const r = await fetch(`${base.replace(/\/$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: process.env.SMS_AI_MODEL || "deepseek-flash",
+        temperature: 0,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              "将短信分类并提取快递取件信息。只返回 JSON: isPickup(boolean), address(string), pickupCode(string), confidence(0-1)。无法确认就降低置信度。",
+          },
+          { role: "user", content },
+        ],
+      }),
+      signal: controller.signal,
+    })
     if (!r.ok) throw new Error("AI_HTTP_ERROR")
     const raw = (await r.json()) as {
       choices?: Array<{ message?: { content?: string } }>

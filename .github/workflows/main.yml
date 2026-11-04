@@ -44,10 +44,17 @@ jobs:
           ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
       - name: Deploy to ECS
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          PUBLIC_ORIGIN: ${{ vars.PUBLIC_ORIGIN }}
+          PUBLIC_API_BASE: ${{ vars.PUBLIC_API_BASE }}
         run: |
+          : "${DEPLOY_HOST:?Set DEPLOY_HOST repository variable}"
+          : "${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN repository variable}"
+          : "${PUBLIC_API_BASE:?Set PUBLIC_API_BASE repository variable}"
           archive="/tmp/woshi-images-${GITHUB_SHA}.tar.gz"
-          scp /tmp/woshi-images.tar.gz "ecs-user@101.200.151.162:${archive}"
-          scp compose.yaml scripts/deploy-container.sh ecs-user@101.200.151.162:/home/ecs-user/woshi/
-          ssh ecs-user@101.200.151.162 "bash /home/ecs-user/woshi/deploy-container.sh '${archive}' '${GITHUB_SHA}'"
-          curl -fsS https://share.libms.top/family/api/health
-          curl -fsS -o /dev/null https://share.libms.top/family/
+          scp /tmp/woshi-images.tar.gz "ecs-user@${DEPLOY_HOST}:${archive}"
+          scp compose.yaml scripts/deploy-container.sh "ecs-user@${DEPLOY_HOST}:/home/ecs-user/woshi/"
+          ssh "ecs-user@${DEPLOY_HOST}" "bash /home/ecs-user/woshi/deploy-container.sh '${archive}' '${GITHUB_SHA}'"
+          curl -fsS "${PUBLIC_API_BASE%/}/health"
+          curl -fsS -o /dev/null "${PUBLIC_ORIGIN%/}/family/"

@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root_dir=/home/ecs-user/woshi
+: "${BETTER_AUTH_URL:?BETTER_AUTH_URL is required}"
+: "${WECHAT_MINI_APPID:?WECHAT_MINI_APPID is required}"
+: "${ADMIN_EMAIL:?ADMIN_EMAIL is required}"
+: "${PUBLIC_ORIGIN:?PUBLIC_ORIGIN is required}"
+: "${PUBLIC_API_BASE:?PUBLIC_API_BASE is required}"
+: "${SMS_AI_BASE_URL:?SMS_AI_BASE_URL is required}"
 mkdir -p "$root_dir/releases"
 chmod 700 "$root_dir"
 if [[ ! -f "$root_dir/.env" ]]; then
@@ -10,12 +16,15 @@ if [[ ! -f "$root_dir/.env" ]]; then
   umask 077
   cat > "$root_dir/.env" <<ENV
 DATABASE_URL=postgresql://woshi:${db_password}@127.0.0.1:5432/woshi
-BETTER_AUTH_URL=https://share.libms.top/family/api/auth
+BETTER_AUTH_URL=${BETTER_AUTH_URL}
 BETTER_AUTH_SECRET=${auth_secret}
-WECHAT_MINI_APPID=wxce94463a6a805e99
+WECHAT_MINI_APPID=${WECHAT_MINI_APPID}
 WECHAT_MINI_SECRET=
+ADMIN_EMAIL=${ADMIN_EMAIL}
+PUBLIC_ORIGIN=${PUBLIC_ORIGIN}
+PUBLIC_API_BASE=${PUBLIC_API_BASE}
 SMS_INGEST_TOKEN=${ingest_token}
-SMS_AI_BASE_URL=https://token.libms.top/v1
+SMS_AI_BASE_URL=${SMS_AI_BASE_URL}
 SMS_AI_MODEL=deepseek-flash
 SMS_AI_API_KEY=
 ENV
