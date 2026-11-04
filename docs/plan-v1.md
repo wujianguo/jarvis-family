@@ -21,7 +21,7 @@ API 独立于 Next.js，可服务 Web、小程序与 iOS 捷径。开发与部�
 
 ### 生产部署目标
 
-目标为个人生活向的阿里云北京机器 `101.200.151.162`，域名暂用 `share.libms.top`。现有 nginx 已在此域名提供静态站，当前静态原型位于 `https://share.libms.top/jarvis-family/`。推荐保留静态站的 `/` 和原型的 `/jarvis-family/`，将未来正式 Web 放在 `https://share.libms.top/family/`，API 对外放在 `https://share.libms.top/family/api/`。Web 设置 Next.js `basePath=/family`，静态资源与站内链接均带此前缀；Better Auth 的公开 URL 使用 `/family/api/auth`，Cookie Path 与回调路径按所选版本验证。服务只监听本机回环地址，PostgreSQL 不对公网开放。上线前检查现有 nginx 路由是否占用 `/family/`，复用现有有效证书并确认续期覆盖 `share.libms.top`。
+目标为 `DEPLOY_HOST` 指定的服务器，公网 HTTPS 站点根地址由 `PUBLIC_ORIGIN` 配置。现有 nginx 在该站点提供静态页面和 `/jarvis-family/` 原型。推荐保留静态站的 `/` 和原型的 `/jarvis-family/`，将未来正式 Web 放在 `<PUBLIC_ORIGIN>/family/`，API 根地址由 `PUBLIC_API_BASE` 配置（路径为 `/family/api`）。Web 设置 Next.js `basePath=/family`，静态资源与站内链接均带此前缀；Better Auth 的公开 URL 使用 `/family/api/auth`，Cookie Path 与回调路径按所选版本验证。服务只监听本机回环地址，PostgreSQL 不对公网开放。上线前检查现有 nginx 路由是否占用 `/family/`，复用现有有效证书并确认续期覆盖 `PUBLIC_ORIGIN` 的域名。
 
 在现有 HTTPS `server` 块中增加以下示意配置；保留原有 `location /`、静态站及 `/jarvis-family/` 规则。API 的 `proxy_pass` 尾部 `/api/` 会把公开前缀 `/family/api/` 替换为内部 `/api/`；Web 的 `proxy_pass` 不带 URI，保留 `/family/` 以匹配 Next.js `basePath`。`^~` 避免现有静态资源正则 location 抢先处理这两个路径，`/family/api/` 的最长前缀先于 `/family/` 命中。
 
@@ -41,7 +41,7 @@ location ^~ /family/ {
 }
 ```
 
-改动前先备份当前 nginx 配置，用 `nginx -t` 校验后 reload，检查 `/`、`/jarvis-family/`、`/family/`、API 与 Auth 回调均走预期路径。小程序后台将 `https://share.libms.top` 配为合法 `request` 域名（如后续使用上传/下载或 WebView，再分别配置对应域名）；真机与正式版走 HTTPS，不使用服务器 IP。iOS 捷径请求同一域名下的 `/family/api/sms/ingest`。
+改动前先备份当前 nginx 配置，用 `nginx -t` 校验后 reload，检查 `/`、`/jarvis-family/`、`/family/`、API 与 Auth 回调均走预期路径。小程序后台将 `PUBLIC_ORIGIN` 的 HTTPS 域名配为合法 `request` 域名（如后续使用上传/下载或 WebView，再分别配置对应域名）；真机与正式版走 HTTPS，不使用服务器 IP。iOS 捷径请求 `<PUBLIC_API_BASE>/sms/ingest`。
 
 ## 数据模型
 
@@ -57,9 +57,9 @@ location ^~ /family/ {
 
 ## 鉴权与白名单
 
-**Web**：Better Auth 邮箱密码登录，关闭公开注册。MVP 启动时用一次性种子步骤写入 `lsjustin@yeah.net` 的 `Whitelist(enabled=true, role=ADMIN)`，并通过受控初始化流程设置该管理员的邮箱密码账户；完成后首次用邮箱密码登录 Web，即可在 Web 显式绑定微信。后续成员由管理员录入白名单并发邀请/设置初始凭据。使用 `@better-auth-ui/react` + shadcn 组件做表单与会话 UI。Better Auth 服务端用 Prisma adapter；登录时和每次业务请求都检查有效白名单，移除成员后下一次请求立即拒绝。Web 同站 Cookie 为 HttpOnly、Secure、SameSite=Lax；生产环境设置强随机 `BETTER_AUTH_SECRET`、精确 `trustedOrigins`、数据库级限速。
+**Web**：Better Auth 邮箱密码登录，关闭公开注册。MVP 启动时用一次性种子步骤将 `ADMIN_EMAIL` 指定的邮箱写入 `Whitelist(enabled=true, role=ADMIN)`，并通过受控初始化流程设置该管理员的邮箱密码账户；完成后首次用邮箱密码登录 Web，即可在 Web 显式绑定微信。后续成员由管理员录入白名单并发邀请/设置初始凭据。使用 `@better-auth-ui/react` + shadcn 组件做表单与会话 UI。Better Auth 服务端用 Prisma adapter；登录时和每次业务请求都检查有效白名单，移除成员后下一次请求立即拒绝。Web 同站 Cookie 为 HttpOnly、Secure、SameSite=Lax；生产环境设置强随机 `BETTER_AUTH_SECRET`、精确 `trustedOrigins`、数据库级限速。
 
-**微信小程序「窝事」**：AppID 已确认为 `wxce94463a6a805e99`，服务端配置 `WECHAT_MINI_APPID=wxce94463a6a805e99`；原始 ID `gh_a696f88a7ea0` 仅作备案。AppSecret 已取得并保存在部署侧密钥库（不入库、不写进方案正文）；上线时注入服务端环境变量 `WECHAT_MINI_SECRET`。未登录且无有效会话时，先用 `wx.login`/Taro 登录获取一次性 `code`，调用 `POST /api/auth/wechat-mini/identity`：API 用服务端 AppID/Secret 调 `jscode2session`，只返回该 code 对应的 `openid` 和有则返回的 `unionid`，不创建 User、Account、Session，不要求白名单，也不返回 `session_key`。接口限速，校验 code 一次性与失效错误，日志不打印 code 或身份值。小程序首页展示这些身份供复制给管理员；不能用客户端自行传入的身份值认证。已有有效会话且仍在白名单者直接进入正常快递列表。
+**微信小程序「窝事」**：AppID 由服务端环境变量 `WECHAT_MINI_APPID` 配置；原始 ID 由 `WECHAT_MINI_ORIGINAL_ID` 配置，仅作备案。AppSecret 保存在部署侧密钥库（不入库、不写进方案正文）；上线时注入服务端环境变量 `WECHAT_MINI_SECRET`。未登录且无有效会话时，先用 `wx.login`/Taro 登录获取一次性 `code`，调用 `POST /api/auth/wechat-mini/identity`：API 用服务端 AppID/Secret 调 `jscode2session`，只返回该 code 对应的 `openid` 和有则返回的 `unionid`，不创建 User、Account、Session，不要求白名单，也不返回 `session_key`。接口限速，校验 code 一次性与失效错误，日志不打印 code 或身份值。小程序首页展示这些身份供复制给管理员；不能用客户端自行传入的身份值认证。已有有效会话且仍在白名单者直接进入正常快递列表。
 
 管理员按 `appid + openid` 或 `unionid` 加入白名单后，用户重新取得 `wx.login` code，经 `POST /api/auth/wechat-mini/exchange` 登录；API 用服务端密钥调用 `jscode2session`，以返回的身份匹配 `Whitelist(enabled=true)`，随后通过经审查的 Better Auth 自定义登录端点/插件创建或关联 User、Account 和 Session。不能使用开放注册端点。若没有白名单，返回 `403 WHITELIST_REQUIRED`，不创建可用会话，客户端继续展示身份页与加白名单指引。
 
@@ -84,9 +84,9 @@ location ^~ /family/ {
 
 ## SMS 接入（MVP）
 
-对齐旧 jarvis 的 iOS 捷径 → `/api/sms/ingest` → AI 分类 → 快递创建链路。旧接口未鉴权、用短期 KV 去重，且后台任务只在进程内运行；新版用独立密钥、PG 持久去重和可恢复 worker 承接这条链路，不复用旧数据。捷径提交正文、发件人、短信接收时间和设备标识；服务端先用规则识别常见取件码/地点，只有规则不确定时才调用模型分类与结构化提取。模型选 `deepseek-flash`，经个人 9router 的 OpenAI 兼容入口 `https://token.libms.top/v1` 调用，该入口已有此模型 ID。仅确认是快递取件、地点和取件码齐全且置信度 ≥ 0.75 时自动建单，否则转 `REVIEW`；阈值在实现阶段用真实样本调整。AI 输出按同一契约二次校验，不能直接写库。短信原文仅发送到已选定的 9router 入口。
+对齐旧 jarvis 的 iOS 捷径 → `/api/sms/ingest` → AI 分类 → 快递创建链路。旧接口未鉴权、用短期 KV 去重，且后台任务只在进程内运行；新版用独立密钥、PG 持久去重和可恢复 worker 承接这条链路，不复用旧数据。捷径提交正文、发件人、短信接收时间和设备标识；服务端先用规则识别常见取件码/地点，只有规则不确定时才调用模型分类与结构化提取。模型由 `SMS_AI_MODEL` 配置，经 `SMS_AI_BASE_URL` 指定的 OpenAI 兼容入口调用。仅确认是快递取件、地点和取件码齐全且置信度 ≥ 0.75 时自动建单，否则转 `REVIEW`；阈值在实现阶段用真实样本调整。AI 输出按同一契约二次校验，不能直接写库。短信原文仅发送到已配置的 AI 入口。
 
-部署环境变量示例：`SMS_AI_BASE_URL=https://token.libms.top/v1`、`SMS_AI_MODEL=deepseek-flash`、`SMS_AI_API_KEY`（由 vault / 部署密钥注入，不在方案记录真实值）。管理员在部署环境分别配置和轮换 `SMS_INGEST_TOKEN` 与 `SMS_AI_API_KEY`；iOS 捷径只持有 ingest token，不持有 AI key。
+部署环境变量：`SMS_AI_BASE_URL`、`SMS_AI_MODEL`、`SMS_AI_API_KEY`（由 vault / 部署密钥注入，不在方案记录真实值）。管理员在部署环境分别配置和轮换 `SMS_INGEST_TOKEN` 与 `SMS_AI_API_KEY`；iOS 捷径只持有 ingest token，不持有 AI key。
 
 | 方法/对外路径                                 | 用途               | 关键语义                                                                                                                                                                                                                                                                              |
 | --------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -122,10 +122,10 @@ location ^~ /family/ {
 
 ## 落地阶段
 
-1. **MVP**：建立 `packages/db` 与 migration、`packages/contracts`、API；实现 Better Auth Web 登录、微信小程序登录桥接、白名单门禁；实现六个快递 API、SMS 独立密钥接入、PG 去重和持久处理、规则/AI 分类、自动建单与管理端审核；在 Taro 与 Web 接入列表、详情、录入、编辑、按 ID/码完成及来源展示。部署到 `share.libms.top/family/`，以真机验证微信登录、会话续期与失效、白名单撤销、短信重复提交和 worker 重启恢复。
+1. **MVP**：建立 `packages/db` 与 migration、`packages/contracts`、API；实现 Better Auth Web 登录、微信小程序登录桥接、白名单门禁；实现六个快递 API、SMS 独立密钥接入、PG 去重和持久处理、规则/AI 分类、自动建单与管理端审核；在 Taro 与 Web 接入列表、详情、录入、编辑、按 ID/码完成及来源展示。部署到 `<PUBLIC_ORIGIN>/family/`，以真机验证微信登录、会话续期与失效、白名单撤销、短信重复提交和 worker 重启恢复。
 2. **下一阶段**：通知提醒、成员权限细分。
 
 ## 上线前待准备
 
-- 小程序 AppID 已确认：部署配置 `WECHAT_MINI_APPID=wxce94463a6a805e99`，并从密钥库注入 `WECHAT_MINI_SECRET`。原始 ID `gh_a696f88a7ea0` 仅备案，不能用于 `jscode2session`。
+- 小程序 AppID 由部署环境变量 `WECHAT_MINI_APPID` 配置，并从密钥库注入 `WECHAT_MINI_SECRET`。原始 ID 由 `WECHAT_MINI_ORIGINAL_ID` 配置，仅作备案，不能用于 `jscode2session`。
 - 核对现有 nginx `/family/` 路由，并在部署环境注入 Better Auth 与 SMS 的正式密钥。
