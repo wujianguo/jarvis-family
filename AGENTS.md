@@ -15,6 +15,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ## 找到工作位置
 
 - `apps/web`：Next.js Web；`apps/api`：Express API。
+- Web 登录后的页面放在 `apps/web/app/(app)`；导航使用 URL path（`/`、`/sms`、`/members`、`/settings`），侧栏在 `apps/web/components/app-sidebar.tsx`。
 - `packages/db`：Prisma 数据库；`packages/contracts`：共享契约；`packages/ui`：共享组件。其余 `packages/*` 是构建配置。
 
 ## 按任务读取
