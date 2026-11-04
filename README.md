@@ -23,3 +23,5 @@ pnpm dev
 Web 使用 `/family` 路径；API 默认监听本机 `3001` 端口。根目录还提供 `pnpm build`、`pnpm lint`、`pnpm format`、`pnpm typecheck`；单独开发可用 `pnpm --filter web dev` 或 `pnpm --filter api dev`。
 
 共享 UI 组件在 `packages/ui`；按需使用 `pnpm dlx shadcn` 添加。
+
+Web 的「录入快递」支持只粘贴短信正文或只上传一张通知截图。规则先解析短信，不确定时使用 `SMS_AI_*`；截图识别需要 `SMS_AI_MODEL` 指向支持图片输入的 OpenAI 兼容模型。解析不足会显示可编辑预览，确认后才保存。API 入口见 [服务实现](apps/api/src/server.ts)。
