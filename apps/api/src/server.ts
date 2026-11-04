@@ -566,28 +566,94 @@ const fingerprint = (v: z.infer<typeof smsInput>) =>
       "utf8"
     )
     .digest("hex")
+const smsLog = (level: "info" | "warn", message: string, fields: object) => {
+  console[level](message, JSON.stringify(fields))
+}
+const smsValidationFields = (req: Request) => {
+  const body = req.body
+  const isObject =
+    body !== null && typeof body === "object" && !Array.isArray(body)
+  const fields = ["content", "device", "receivedAt", "sender", "clientEventId"]
+  const receivedAt = isObject ? body.receivedAt : undefined
+  return {
+    code: "VALIDATION_ERROR",
+    ip: req.ip,
+    contentType: req.get("Content-Type") ?? null,
+    bodyIsObject: isObject,
+    fieldsPresent: Object.fromEntries(
+      fields.map((field) => [field, isObject && Object.hasOwn(body, field)])
+    ),
+    contentLength:
+      isObject && typeof body.content === "string" ? body.content.length : null,
+    receivedAtType:
+      receivedAt === null
+        ? "null"
+        : Array.isArray(receivedAt)
+          ? "array"
+          : typeof receivedAt,
+    receivedAtValue:
+      receivedAt === undefined ? null : String(receivedAt).slice(0, 64),
+  }
+}
+const smsAccepted = (
+  req: Request,
+  data: z.infer<typeof smsInput>,
+  id: string,
+  status: 200 | 202,
+  deduped: boolean
+) => {
+  smsLog("info", "SMS ingest accepted", {
+    ip: req.ip,
+    id,
+    status,
+    device: data.device.slice(0, 64),
+    sender: data.sender?.slice(0, 64) ?? null,
+    contentLength: data.content.length,
+    deduped,
+  })
+}
 app.post(
   "/api/sms/ingest",
   run(async (req, res) => {
     if (limited(`sms-ip:${req.ip}`, 60, 60000)) {
+      smsLog("warn", "SMS ingest rate limited", { ip: req.ip, keyType: "ip" })
       fail(res, 429, "RATE_LIMITED", "请求过于频繁")
       return
     }
     const secret = process.env.SMS_INGEST_TOKEN || ""
     const given = req.headers.authorization?.replace(/^Bearer /i, "") || ""
     if (!secret || !constantToken(given, secret)) {
+      smsLog("warn", "SMS ingest authentication failed", {
+        ip: req.ip,
+        reason: given ? "token mismatch" : "token missing",
+      })
       fail(res, 401, "UNAUTHENTICATED", "无效凭据")
       return
     }
     const v = smsInput.safeParse(req.body)
-    if (
-      !v.success ||
-      new Date(v.data.receivedAt).getTime() > Date.now() + 300000
-    ) {
+    if (!v.success) {
+      smsLog("warn", "SMS ingest validation failed", {
+        ...smsValidationFields(req),
+        issues: v.error.issues.map(({ path, message }) => ({ path, message })),
+      })
+      fail(res, 400, "VALIDATION_ERROR", "短信数据无效")
+      return
+    }
+    if (new Date(v.data.receivedAt).getTime() > Date.now() + 300000) {
+      smsLog("warn", "SMS ingest validation failed", {
+        ...smsValidationFields(req),
+        issues: [
+          { path: ["receivedAt"], message: "接收时间晚于当前时间 5 分钟" },
+        ],
+      })
       fail(res, 400, "VALIDATION_ERROR", "短信数据无效")
       return
     }
     if (limited(`sms-device:${v.data.device}`, 120, 60000)) {
+      smsLog("warn", "SMS ingest rate limited", {
+        ip: req.ip,
+        keyType: "device",
+      })
       fail(res, 429, "RATE_LIMITED", "设备请求过于频繁")
       return
     }
@@ -606,6 +672,7 @@ app.post(
           fail(res, 409, "IDEMPOTENCY_CONFLICT", "事件 ID 已用于另一条短信")
           return
         }
+        smsAccepted(req, v.data, existing.id, 200, true)
         res.status(200).json({ id: existing.id, accepted: true, deduped: true })
         return
       }
@@ -618,12 +685,14 @@ app.post(
           fingerprint: hash,
         },
       })
+      smsAccepted(req, v.data, row.id, 202, false)
       res.status(202).json({ id: row.id, accepted: true, deduped: false })
     } catch {
       const existing = await db.smsIngest.findUnique({
         where: { fingerprint: hash },
       })
       if (existing) {
+        smsAccepted(req, v.data, existing.id, 200, true)
         res.status(200).json({ id: existing.id, accepted: true, deduped: true })
         return
       }
@@ -848,36 +917,49 @@ async function processSms(id: string) {
   if (!item || item.status !== "PROCESSING") return
   const out = await parseNotice({ content: item.content })
   if (out.reason === "AI_NOT_CONFIGURED" || out.reason === "AI_FAILED") {
-    await db.smsIngest.updateMany({
+    const result = await db.smsIngest.updateMany({
       where: { id, status: "PROCESSING" },
       data: {
         status: "REVIEW",
         errorCode: out.reason,
       },
     })
+    if (result.count)
+      smsLog("info", "SMS processed", {
+        id,
+        status: "REVIEW",
+        reason: out.reason,
+      })
     return
   }
   if (!out.isPickup) {
-    await db.smsIngest.updateMany({
+    const result = await db.smsIngest.updateMany({
       where: { id, status: "PROCESSING" },
       data: { status: "IGNORED" },
     })
+    if (result.count) smsLog("info", "SMS processed", { id, status: "IGNORED" })
     return
   }
   const address = out.address?.trim(),
     pickupCode = out.pickupCode?.trim()
   if (!out.ready || !address || !pickupCode) {
-    await db.smsIngest.updateMany({
+    const result = await db.smsIngest.updateMany({
       where: { id, status: "PROCESSING" },
       data: { status: "REVIEW", errorCode: "LOW_CONFIDENCE" },
     })
+    if (result.count)
+      smsLog("info", "SMS processed", {
+        id,
+        status: "REVIEW",
+        reason: "LOW_CONFIDENCE",
+      })
     return
   }
-  await db.$transaction(async (tx) => {
+  const status = await db.$transaction(async (tx) => {
     const rows = await tx.$queryRaw<
       Array<{ id: string; status: string; pickupId: string | null }>
     >`SELECT id,status,"pickupId" FROM "SmsIngest" WHERE id=${id} FOR UPDATE`
-    if (rows[0]?.status !== "PROCESSING" || rows[0].pickupId) return
+    if (rows[0]?.status !== "PROCESSING" || rows[0].pickupId) return null
     const matches = await tx.expressPickup.findMany({
       where: {
         status: "PENDING",
@@ -891,7 +973,7 @@ async function processSms(id: string) {
         where: { id },
         data: { status: "REVIEW", errorCode: "AMBIGUOUS_MATCH" },
       })
-      return
+      return "REVIEW"
     }
     if (matches.length === 1) {
       await tx.smsIngest.update({
@@ -902,7 +984,7 @@ async function processSms(id: string) {
           errorCode: null,
         },
       })
-      return
+      return "LINKED_EXISTING"
     }
     const pickup = await tx.expressPickup.create({
       data: { address, pickupCode, rawInfo: item.content, source: "SMS" },
@@ -911,7 +993,9 @@ async function processSms(id: string) {
       where: { id },
       data: { status: "CREATED", pickupId: pickup.id, errorCode: null },
     })
+    return "CREATED"
   })
+  if (status) smsLog("info", "SMS processed", { id, status })
 }
 async function worker() {
   try {
