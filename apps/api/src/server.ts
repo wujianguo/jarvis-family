@@ -554,18 +554,31 @@ const constantToken = (given: string, expected: string) => {
     b = Buffer.from(expected)
   return a.length === b.length && timingSafeEqual(a, b)
 }
-const fingerprint = (v: z.infer<typeof smsInput>) =>
+const normalizedSmsContent = (content: string) =>
+  content.trim().replace(/\s+/g, " ")
+const fingerprint = (v: z.infer<typeof smsInput>, receivedAt: Date) =>
   createHash("sha256")
     .update(
       [
         v.device.trim().toLowerCase(),
         (v.sender || "").trim().toLowerCase(),
-        new Date(v.receivedAt).toISOString().slice(0, 19),
-        v.content.trim().replace(/\s+/g, " "),
+        receivedAt.toISOString().slice(0, 19),
+        normalizedSmsContent(v.content),
       ].join("|"),
       "utf8"
     )
     .digest("hex")
+const matchesSmsIngest = (
+  existing: { fingerprint: string; content: string; sender: string | null },
+  data: z.infer<typeof smsInput>,
+  hash: string
+) =>
+  existing.fingerprint === hash ||
+  (!data.receivedAt &&
+    normalizedSmsContent(existing.content) ===
+      normalizedSmsContent(data.content) &&
+    (existing.sender || "").trim().toLowerCase() ===
+      (data.sender || "").trim().toLowerCase())
 const smsLog = (level: "info" | "warn", message: string, fields: object) => {
   console[level](message, JSON.stringify(fields))
 }
@@ -615,6 +628,7 @@ const smsAccepted = (
 app.post(
   "/api/sms/ingest",
   run(async (req, res) => {
+    const requestReceivedAt = new Date()
     if (limited(`sms-ip:${req.ip}`, 60, 60000)) {
       smsLog("warn", "SMS ingest rate limited", { ip: req.ip, keyType: "ip" })
       fail(res, 429, "RATE_LIMITED", "请求过于频繁")
@@ -630,7 +644,21 @@ app.post(
       fail(res, 401, "UNAUTHENTICATED", "无效凭据")
       return
     }
-    const v = smsInput.safeParse(req.body)
+    const body =
+      req.body !== null &&
+      typeof req.body === "object" &&
+      !Array.isArray(req.body)
+        ? { ...req.body }
+        : req.body
+    if (
+      body !== null &&
+      typeof body === "object" &&
+      !Array.isArray(body) &&
+      !smsInput.shape.receivedAt.safeParse(body.receivedAt).success
+    ) {
+      delete body.receivedAt
+    }
+    const v = smsInput.safeParse(body)
     if (!v.success) {
       smsLog("warn", "SMS ingest validation failed", {
         ...smsValidationFields(req),
@@ -639,7 +667,10 @@ app.post(
       fail(res, 400, "VALIDATION_ERROR", "短信数据无效")
       return
     }
-    if (new Date(v.data.receivedAt).getTime() > Date.now() + 300000) {
+    const receivedAt = v.data.receivedAt
+      ? new Date(v.data.receivedAt)
+      : requestReceivedAt
+    if (receivedAt.getTime() > requestReceivedAt.getTime() + 300000) {
       smsLog("warn", "SMS ingest validation failed", {
         ...smsValidationFields(req),
         issues: [
@@ -657,7 +688,7 @@ app.post(
       fail(res, 429, "RATE_LIMITED", "设备请求过于频繁")
       return
     }
-    const hash = fingerprint(v.data)
+    const hash = fingerprint(v.data, receivedAt)
     if (v.data.clientEventId) {
       const existing = await db.smsIngest.findUnique({
         where: {
@@ -668,7 +699,7 @@ app.post(
         },
       })
       if (existing) {
-        if (existing.fingerprint !== hash) {
+        if (!matchesSmsIngest(existing, v.data, hash)) {
           fail(res, 409, "IDEMPOTENCY_CONFLICT", "事件 ID 已用于另一条短信")
           return
         }
@@ -681,17 +712,26 @@ app.post(
       const row = await db.smsIngest.create({
         data: {
           ...v.data,
-          receivedAt: new Date(v.data.receivedAt),
+          receivedAt,
           fingerprint: hash,
         },
       })
       smsAccepted(req, v.data, row.id, 202, false)
       res.status(202).json({ id: row.id, accepted: true, deduped: false })
     } catch {
-      const existing = await db.smsIngest.findUnique({
-        where: { fingerprint: hash },
-      })
-      if (existing) {
+      const existing =
+        (await db.smsIngest.findUnique({ where: { fingerprint: hash } })) ||
+        (v.data.clientEventId
+          ? await db.smsIngest.findUnique({
+              where: {
+                device_clientEventId: {
+                  device: v.data.device,
+                  clientEventId: v.data.clientEventId,
+                },
+              },
+            })
+          : null)
+      if (existing && matchesSmsIngest(existing, v.data, hash)) {
         smsAccepted(req, v.data, existing.id, 200, true)
         res.status(200).json({ id: existing.id, accepted: true, deduped: true })
         return
