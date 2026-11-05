@@ -24,6 +24,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -150,49 +151,55 @@ export function AppSidebar({
                 align="end"
                 className="min-w-56"
               >
-                <DropdownMenuLabel className="flex items-center gap-2">
-                  <Avatar className="size-8">
-                    {user.image && (
-                      <AvatarImage src={user.image} alt={displayName} />
-                    )}
-                    <AvatarFallback>
-                      {displayName.slice(0, 1).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="grid min-w-0 text-left leading-tight">
-                    <span className="truncate">{displayName}</span>
-                    <span className="truncate font-normal">{user.email}</span>
-                  </span>
-                </DropdownMenuLabel>
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="flex items-center gap-2">
+                    <Avatar className="size-8">
+                      {user.image && (
+                        <AvatarImage src={user.image} alt={displayName} />
+                      )}
+                      <AvatarFallback>
+                        {displayName.slice(0, 1).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="grid min-w-0 text-left leading-tight">
+                      <span className="truncate">{displayName}</span>
+                      <span className="truncate font-normal">{user.email}</span>
+                    </span>
+                  </DropdownMenuLabel>
+                </DropdownMenuGroup>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  render={<Link href="/settings/account" />}
-                  onClick={() => isMobile && setOpenMobile(false)}
-                >
-                  <Settings />
-                  个人信息与账户设置
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  render={<Link href="/settings/security" />}
-                  onClick={() => isMobile && setOpenMobile(false)}
-                >
-                  <KeyRound />
-                  管理 API Key
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={!mounted}
-                  onClick={() =>
-                    setTheme(resolvedTheme === "dark" ? "light" : "dark")
-                  }
-                >
-                  {mounted && resolvedTheme === "dark" ? <Sun /> : <Moon />}
-                  切换主题
-                </DropdownMenuItem>
+                <DropdownMenuGroup>
+                  <DropdownMenuItem
+                    render={<Link href="/settings/account" />}
+                    onClick={() => isMobile && setOpenMobile(false)}
+                  >
+                    <Settings />
+                    个人信息与账户设置
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    render={<Link href="/settings/security" />}
+                    onClick={() => isMobile && setOpenMobile(false)}
+                  >
+                    <KeyRound />
+                    管理 API Key
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={!mounted}
+                    onClick={() =>
+                      setTheme(resolvedTheme === "dark" ? "light" : "dark")
+                    }
+                  >
+                    {mounted && resolvedTheme === "dark" ? <Sun /> : <Moon />}
+                    切换主题
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => void authClient.signOut()}>
-                  <LogOut />
-                  退出登录
-                </DropdownMenuItem>
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={() => void authClient.signOut()}>
+                    <LogOut />
+                    退出登录
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
               </DropdownMenuContent>
             </DropdownMenu>
           </SidebarMenuItem>
