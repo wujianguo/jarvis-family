@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth"
 import { prismaAdapter } from "better-auth/adapters/prisma"
-import { bearer } from "better-auth/plugins"
+import { apiKey, bearer } from "better-auth/plugins"
 import { db } from "@workspace/db"
 
 const publicURL =
@@ -15,7 +15,7 @@ export const auth = betterAuth({
     disableSignUp: true,
     minPasswordLength: 8,
   },
-  plugins: [bearer()],
+  plugins: [bearer(), apiKey()],
   trustedOrigins: [new URL(publicURL).origin],
   advanced: {
     useSecureCookies: publicURL.startsWith("https:"),

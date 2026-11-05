@@ -127,7 +127,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <RoleContext.Provider value={role}>
       <SidebarProvider>
-        <AppSidebar role={role} email={session.data.user.email} />
+        <AppSidebar role={role} user={session.data.user} />
         <SidebarInset>
           <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
             <SidebarTrigger />
@@ -136,7 +136,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <BreadcrumbList>
                 <BreadcrumbItem>
                   <BreadcrumbPage>
-                    窝事 / {titles[pathname] || "快递"}
+                    窝事 /{" "}
+                    {titles[pathname] ||
+                      (pathname.startsWith("/settings/") ? "设置" : "快递")}
                   </BreadcrumbPage>
                 </BreadcrumbItem>
               </BreadcrumbList>

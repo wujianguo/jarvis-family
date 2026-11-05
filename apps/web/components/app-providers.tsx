@@ -15,7 +15,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
       <AuthProvider
         authClient={authClient}
         queryClient={queryClient}
-        basePaths={{ auth: "/family/auth" }}
+        basePaths={{ auth: "/family/auth", settings: "/family/settings" }}
         redirectTo="/family"
         emailAndPassword={{
           enabled: true,
