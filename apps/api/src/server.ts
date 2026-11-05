@@ -772,6 +772,7 @@ app.get(
       where: { AND: filters },
       select: {
         id: true,
+        content: true,
         sender: true,
         device: true,
         receivedAt: true,

@@ -59,7 +59,7 @@ type Sms = {
   device: string
   status: string
   receivedAt: string
-  content?: string
+  content: string
   errorCode?: string
   pickupId?: string
 }
@@ -370,11 +370,10 @@ export function BusinessPage({
                   )
                 }
               >
-                <b>{s.status}</b>
-                <span>
-                  {s.sender || "未知发件人"} · {s.device}
-                </span>
                 <small>{new Date(s.receivedAt).toLocaleString("zh-CN")}</small>
+                <span className="line-clamp-2 w-full break-all whitespace-normal">
+                  {s.content}
+                </span>
               </Button>
             ))}
             {!sms.length && (
