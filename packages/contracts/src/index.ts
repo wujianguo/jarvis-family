@@ -16,16 +16,31 @@ export const smsInput = z.object({
   device: z.string().trim().min(1).max(160),
   clientEventId: z.string().trim().min(1).max(128).optional(),
 })
-export const whitelistInput = z
-  .object({
-    email: z.email().optional(),
-    wechatAppId: z.string().optional(),
-    wechatOpenId: z.string().optional(),
-    wechatUnionId: z.string().optional(),
-    displayName: z.string().trim().min(1).max(80),
-    role: z.enum(["ADMIN", "MEMBER"]).default("MEMBER"),
-    enabled: z.boolean().default(true),
+type WhitelistIdentity = {
+  email?: string | null
+  wechatAppId?: string | null
+  wechatOpenId?: string | null
+  wechatUnionId?: string | null
+}
+
+export const hasWhitelistIdentity = (v: WhitelistIdentity) =>
+  !!(v.email || (v.wechatAppId && v.wechatOpenId) || v.wechatUnionId)
+
+const whitelistFields = z.object({
+  email: z.email().optional(),
+  wechatAppId: z.string().optional(),
+  wechatOpenId: z.string().optional(),
+  wechatUnionId: z.string().optional(),
+  displayName: z.string().trim().min(1).max(80),
+  role: z.enum(["ADMIN", "MEMBER"]),
+  enabled: z.boolean(),
+})
+export const whitelistInput = whitelistFields
+  .extend({
+    role: whitelistFields.shape.role.default("MEMBER"),
+    enabled: whitelistFields.shape.enabled.default(true),
   })
-  .refine(
-    (v) => !!(v.email || (v.wechatAppId && v.wechatOpenId) || v.wechatUnionId)
-  )
+  .refine(hasWhitelistIdentity)
+export const whitelistPatch = whitelistFields
+  .partial()
+  .refine((v) => Object.keys(v).length > 0)

@@ -5,6 +5,7 @@
   "type": "module",
   "main": "./src/index.ts",
   "scripts": {
+    "test": "node src/whitelist.test.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write . --ignore-path ../../.prettierignore",

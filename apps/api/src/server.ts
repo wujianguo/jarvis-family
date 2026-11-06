@@ -5,10 +5,12 @@ import express, {
 } from "express"
 import { db, SmsIngestStatus, type Prisma } from "@workspace/db"
 import {
+  hasWhitelistIdentity,
   pickupInput,
   pickupPatch,
   smsInput,
   whitelistInput,
+  whitelistPatch,
 } from "@workspace/contracts"
 import { auth } from "./auth.js"
 import { hashPassword } from "better-auth/crypto"
@@ -934,7 +936,7 @@ app.patch(
   run(async (req, res) => {
     const p = await principal(req, res, true)
     if (!p) return
-    const v = whitelistInput.partial().safeParse(req.body)
+    const v = whitelistPatch.safeParse(req.body)
     if (!v.success) {
       fail(res, 400, "VALIDATION_ERROR", "白名单内容无效")
       return
@@ -943,6 +945,10 @@ app.patch(
     const row = await db.whitelist.findUnique({ where: { id } })
     if (!row) {
       fail(res, 404, "NOT_FOUND", "成员不存在")
+      return
+    }
+    if (!hasWhitelistIdentity({ ...row, ...v.data })) {
+      fail(res, 400, "VALIDATION_ERROR", "白名单内容无效")
       return
     }
     if (row.userId === p.user.id && v.data.enabled === false) {
